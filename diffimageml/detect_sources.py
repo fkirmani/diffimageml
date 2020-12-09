@@ -7,10 +7,10 @@ from astropy.convolution import Gaussian2DKernel
 
 
 def test_source_detection(hdu):
-    return(source_cat(hdu))
+    return(detect_sources(hdu))
 
 
-def source_cat(hdu,nsigma=2,kfwhm=2.0,npixels=5,deblend=False,contrast=.001,targ_coord=None):
+def detect_sources(hdu,nsigma=2,kfwhm=2.0,npixels=5,deblend=False,contrast=.001,targ_coord=None):
     """
     catalog of properties for detected sources using the extended source photometry on the bkg subtracted data
     """
