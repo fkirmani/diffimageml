@@ -7,7 +7,7 @@ from .util import *
 from .detect_sources import *
 from .build_ePSF import *
 from .plant_fakes import *
-from . import test_diffimageml
+from .test_diffimageml import *
 
 def test(package=None, test_path=None, args=None, plugins=None,
          verbose=False, pastebin=None, remote_data=False, pep8=False,
