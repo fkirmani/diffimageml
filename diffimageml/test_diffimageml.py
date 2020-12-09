@@ -26,7 +26,6 @@ _TEMPLATEIM2_ = os.path.abspath(os.path.join(
 def test_pristine_data():
 	"""
 	Check for existence of the pristine (level 0) test data
-	TODO: Create a FakePlanter object from the pristine (level 0) test data
 	located in the testdata directory
 	"""
 	assert os.path.isfile(_DIFFIM1_)
@@ -37,9 +36,14 @@ def test_pristine_data():
 	assert os.path.isfile(_SEARCHIM2_)
 	assert os.path.isfile(_TEMPLATEIM2_)
 
-	# TODO : make a FakePlanter object from the data
-	#fakeplanter = diffimageml.FakePlanter(_DIFFIM1_)
-	return
+	return 1
+
+
+def test_fakeplanter_class():
+	"""Create a FakePlanter object from the pristine (level 0) test data"""
+	fakeplanter = diffimageml.FakePlanter(
+		_DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
+	return 1
 
 
 def test_checkepsfmodel(fakeplanterobject):
@@ -50,18 +54,28 @@ def test_checkepsfmodel(fakeplanterobject):
 def test_diffimageml():
 	failed=0
 	total=0
-	#Fill in tests here.
-
+	# Fill in tests here.  Put a separate try/except around each test and track
+	# the count of total tests and failures
 	try:
+		print('Testing pristine data...', end='')
+		total += 1
 		test_pristine_data()
-		total+=1
-		print('Testing pristine data...',end='')
-		print('Passed!')
+		print("Passed!")
 	except Exception as e:
 		print('Failed')
 		print(traceback.format_exc())
-		
 		failed+=1
+
+	try:
+		print('Testing FakePlanter instantiation...', end='')
+		total += 1
+		test_fakeplanter_class()
+		print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+
 
 	print('Passed %i/%i tests.'%(total-failed,total))
 

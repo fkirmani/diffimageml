@@ -21,7 +21,7 @@ class FitsImage:
     such as a PSF model, and detected source catalog.
     """
     def __init__(self, fitsfilename):
-        self.hdulist = fits.read(fitsfilename)
+        self.hdulist = fits.open(fitsfilename)
         self.psfmodel = None
         self.sourcecatalog = None
         return
@@ -33,9 +33,9 @@ class FakePlanter:
     algorithms
     """
 
-    def __init__(self, diffimfitsfilename,
-                 searchimfitsfilename=None,
-                 templateimfitsfilename=None):
+    def __init__(self, diffim_fitsfilename,
+                 searchim_fitsfilename=None,
+                 templateim_fitsfilename=None):
         """Read in a triplet of three FITS files that hold
         A. a difference image
         B. a 'search' image (typically a "new" single-epoch static sky image)
@@ -49,11 +49,11 @@ class FakePlanter:
 
         """
         # Read in the three fits files that hold the diff images
-        self.diffim = FitsImage(diffimfitsfilename)
-        if searchimfitsfilename:
-            self.searchim = FitsImage(searchimfitsfilename)
-        if templateimfitsfilename:
-            self.templateim = FitsImage(templatefitsfilename)
+        self.diffim = FitsImage(diffim_fitsfilename)
+        if searchim_fitsfilename:
+            self.searchim = FitsImage(searchim_fitsfilename)
+        if templateim_fitsfilename:
+            self.templateim = FitsImage(templateim_fitsfilename)
         return
 
     @property
