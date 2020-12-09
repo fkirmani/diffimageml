@@ -2,11 +2,12 @@ from __future__ import print_function
 import os
 from astropy.tests.helper import TestRunner
 
+from .fakesnplanter import *
 from .util import *
 from .detect_sources import *
 from .build_ePSF import *
 from .plant_fakes import *
-
+from . import test_diffimageml
 
 def test(package=None, test_path=None, args=None, plugins=None,
          verbose=False, pastebin=None, remote_data=False, pep8=False,
