@@ -77,17 +77,26 @@ class FitsImage:
         """Check if a list of detected sources exists """
         return self.sourcecatalog is not None
 
-    def detect_sources(self,nsigma=2,kfwhm=2.0,npixels=5,deblend=False,contrast=.001,targ_coord=None):
+    def detect_sources(self,nsigma=2,kfwhm=2.0,npixels=5,deblend=False,contrast=.001):
         """Detect sources (transient candidates) in the diff image using
         the astropy.photutils threshold-based source detection algorithm.
 
         Parameters
         ----------
-        
+        nsgima : float
+            SNR required for pixel to be considered detected
+        kfwhm : float
+            FWHM of Circular Gaussian Kernel convolved on data to smooth noise
+        npixels : int
+            Number of connected pixels which are detected to give source
+        deblend : bool
+            Will use multiple levels/iterations to deblend single sources into multiple
+        contrast : float
+            If deblending the flux ratio required for local peak to be considered its own object
 
         Returns
         -------
-
+        self.sourcecatalog: :class:`~photutils.segmentation.properties.SourceCatalog`
         """
         # TODO
 
@@ -135,7 +144,7 @@ class FitsImage:
                                 error=None,filter_kernel=kernel)
 
         self.sourcecatalog = cat 
-        return
+        return self.sourcecatalog
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),

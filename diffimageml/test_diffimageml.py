@@ -50,7 +50,7 @@ def test_checkepsfmodel(fakeplanterobject):
 	return(fakeplanterobject.has_epsf_model)
 
 
-def test_fakeplanter(self,accuracy=0.05):
+def test_fakeplanter(accuracy=0.05):
     # self given a fake planter object which has had fake planting done 
     # unit test
     planthdu = self.plant_fakes
@@ -101,14 +101,14 @@ def test_diffimageml():
 	try:
 		print('Testing FakePlanter planting...', end='')
 		total += 1
-		test_fakeplanter(self,accuracy=0.05):
+		test_fakeplanter(accuracy=0.05)
 		print("Passed!")
 	except Exception as e:
 		print('Failed')
 		print(traceback.format_exc())
 		failed+=1
 
-try:
+	try:
 		FitsImage_Instance = None
 		print('Testing FitsImage instantiation...', end='')
 		total += 1
