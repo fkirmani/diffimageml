@@ -38,7 +38,6 @@ def test_pristine_data():
 
 	return 1
 
-
 def test_fakeplanter_class():
 	"""Create a FakePlanter object from the pristine (level 0) test data"""
 	fakeplanter = diffimageml.FakePlanter(
@@ -50,7 +49,8 @@ def test_checkepsfmodel(fakeplanterobject):
 	"""Given a fakeplanterobject, check if it has an ePSF model"""
 	return(fakeplanterobject.has_epsf_model)
 
-def test_fakeplanter(self,accuracy=0.05):
+
+def test_fakeplanter(accuracy=0.05):
     # self given a fake planter object which has had fake planting done 
     # unit test
     planthdu = self.plant_fakes
@@ -63,6 +63,15 @@ def test_fakeplanter(self,accuracy=0.05):
         #print("plant was successful")
         return 1
 
+def test_FitsImageClass():
+	from astropy.io.fits import HDUList,PrimaryHDU
+	FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
+	assert( isinstance(FitsImageClassInstance.hdulist,HDUList))
+	return FitsImageClassInstance
+	
+def test_source_detection(FitsImageTest):
+	source_catalog = FitsImageTest.detect_sources()
+	return FitsImageTest.has_detections()
 
 def test_diffimageml():
 	failed=0
@@ -92,7 +101,33 @@ def test_diffimageml():
 	try:
 		print('Testing FakePlanter planting...', end='')
 		total += 1
-		test_fakeplanter(self,accuracy=0.05):
+		test_fakeplanter(accuracy=0.05)
+		print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+
+	try:
+		FitsImage_Instance = None
+		print('Testing FitsImage instantiation...', end='')
+		total += 1
+		FitsImage_Instance = test_FitsImageClass()
+		print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+    
+	try:
+		print('Testing SourceDetection...', end='')
+		total += 1
+		if FitsImage_Instance is not None:
+			detected = test_source_detection(FitsImage_Instance)
+		else:
+			detected = test_source_detection(diffimageml.FitsImage(_SEARCHIM1_))
+		if not detected:
+			raise RuntimeError("Source detection successful, but no catalog found.")
 		print("Passed!")
 	except Exception as e:
 		print('Failed')
