@@ -49,6 +49,20 @@ def test_checkepsfmodel(fakeplanterobject):
 	"""Given a fakeplanterobject, check if it has an ePSF model"""
 	return(fakeplanterobject.has_epsf_model)
 
+
+def test_fakeplanter(self,accuracy=0.05):
+    # self given a fake planter object which has had fake planting done 
+    # unit test
+    planthdu = self.plant_fakes
+    hdu = self.hdu
+
+    fitsflux = np.sum(planthdu.data - hdu.data)
+    epsfflux = int(planthdu.header['N_fake'])*float(planthdu.header['f_fake'])
+    #print(fitsflux,epsfflux)
+    if np.abs(fitsflux-epsfflux)/epsfflux < accuracy:
+        #print("plant was successful")
+        return 1
+
 def test_FitsImageClass():
 	from astropy.io.fits import HDUList,PrimaryHDU
 	FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
@@ -85,6 +99,16 @@ def test_diffimageml():
 		failed+=1
 
 	try:
+		print('Testing FakePlanter planting...', end='')
+		total += 1
+		test_fakeplanter(self,accuracy=0.05):
+		print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+
+try:
 		FitsImage_Instance = None
 		print('Testing FitsImage instantiation...', end='')
 		total += 1
@@ -94,7 +118,7 @@ def test_diffimageml():
 		print('Failed')
 		print(traceback.format_exc())
 		failed+=1
-
+    
 	try:
 		print('Testing SourceDetection...', end='')
 		total += 1
@@ -109,7 +133,6 @@ def test_diffimageml():
 		print('Failed')
 		print(traceback.format_exc())
 		failed+=1
-
 
 	print('Passed %i/%i tests.'%(total-failed,total))
 
