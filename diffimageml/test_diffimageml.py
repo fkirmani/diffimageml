@@ -5,23 +5,23 @@ _SRCDIR_ = os.path.abspath(os.path.join(
 	os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
 import diffimageml
-
+print(_SRCDIR_)
 # Hard coding the test data filenames
 _DIFFIM1_ = os.path.abspath(os.path.join(
-	_SRCDIR_, 'test_data', 'diff_pydia_1.fits.fz'))
+	_SRCDIR_, 'diffimageml', 'test_data', 'diff_pydia_1.fits.fz'))
 _SEARCHIM1_ = os.path.abspath(os.path.join(
-	_SRCDIR_, 'test_data', 'sky_image_1.fits.fz'))
+	_SRCDIR_, 'diffimageml', 'test_data', 'sky_image_1.fits.fz'))
 _TEMPLATEIM1_ = os.path.abspath(os.path.join(
-	_SRCDIR_, 'test_data', 'template_1.fits.fz'))
+	_SRCDIR_, 'diffimageml', 'test_data', 'template_1.fits.fz'))
 
 _DIFFIM2_ = os.path.abspath(os.path.join(
-	_SRCDIR_, 'test_data', 'diff_pydia_2.fits.fz'))
+	_SRCDIR_, 'diffimageml', 'test_data', 'diff_pydia_2.fits.fz'))
 _SEARCHIM2_ = os.path.abspath(os.path.join(
-	_SRCDIR_, 'test_data', 'sky_image_2.fits.fz'))
+	_SRCDIR_, 'diffimageml', 'test_data', 'sky_image_2.fits.fz'))
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
-	_SRCDIR_, 'test_data', 'template_2.fits.fz'))
+	_SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-
+_DOFAST_ = False # Use this to skip slow tests
 
 def test_pristine_data():
 	"""
@@ -74,6 +74,8 @@ def test_source_detection(FitsImageTest):
 	return FitsImageTest.has_detections()
 
 def test_diffimageml():
+	if _DOFAST_:
+		print("SKIPPING SLOW TESTS")
 	failed=0
 	total=0
 	# Fill in tests here.  Put a separate try/except around each test and track
@@ -120,15 +122,16 @@ def test_diffimageml():
 		failed+=1
     
 	try:
-		print('Testing SourceDetection...', end='')
-		total += 1
-		if FitsImage_Instance is not None:
-			detected = test_source_detection(FitsImage_Instance)
-		else:
-			detected = test_source_detection(diffimageml.FitsImage(_SEARCHIM1_))
-		if not detected:
-			raise RuntimeError("Source detection successful, but no catalog found.")
-		print("Passed!")
+		if not _DOFAST_:
+			print('Testing SourceDetection...', end='')
+			total += 1
+			if FitsImage_Instance is not None:
+				detected = test_source_detection(FitsImage_Instance)
+			else:
+				detected = test_source_detection(diffimageml.FitsImage(_SEARCHIM1_))
+			if not detected:
+				raise RuntimeError("Source detection successful, but no catalog found.")
+			print("Passed!")
 	except Exception as e:
 		print('Failed')
 		print(traceback.format_exc())
