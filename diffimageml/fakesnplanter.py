@@ -12,6 +12,26 @@ class fakesnplanter(object):
         #TODO: read in a fits file that holds a diff image
         #TODO: add attributes pointing to the associated static
         # sky 'search' image and template. Maybe read them in as well?
+
+        self.has_fakes = False
+        self.has_lattice = False
+        self.has_lco_epsf = False
+
+        return
+
+    def has_lco_epsf(self):
+        """Check if lco epsf (circular gaussian) exists"""
+        return
+
+    def lco_epsf(self):
+        return
+
+    def has_lattice(self):
+        """Check if a grid of locations exists"""
+        return
+
+    def lattice(self):
+        """Function for constructing list of pixels in a grid over the image"""
         return
 
     def has_epsf_model(self):
