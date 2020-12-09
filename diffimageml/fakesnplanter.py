@@ -1,27 +1,77 @@
-from astropy import fits
+from astropy.io import fits
+from photutils.psf import EPSFModel
+import numpy as np
+from astroquery.gaia import Gaia
 
-class fakesnplanter(object):
-    """A class for handling the FITS file diff images,
+class FakePlanterEPSFModel(EPSFModel):
+    """ A class for holding an effective PSF model."""
+    def __init__(self):
+        self.fluxarray = np.array([]) # array of flux density values (e-/s/cm2)
+
+        return
+
+    def scaled_to_mag(self, mag):
+        """Return a data array scaled to the given magnitude.
+        Requires that a zeropoint has been set.
+        """
+        return self.fluxarray * 10**(-0.4*(mag-self.zeropoint))
+
+class FitsImage:
+    """A class to hold a single FITS image and associated products
+    such as a PSF model, and detected source catalog.
+    """
+    def __init__(self, fitsfilename):
+        self.hdulist = fits.open(fitsfilename)
+        self.psfmodel = None
+        self.sourcecatalog = None
+        return
+
+class FakePlanter:
+    """A class for handling the FITS file triplets (diff,search,ref),
     planting fakes, detecting fakes, and creating sub-images and
     catalogs for use in training+validation of machine learning
     algorithms
     """
 
-    def __init__(self, diffimfitsfilename):
-        """Read in a FITS file that holds a difference image."""
-        #TODO: read in a fits file that holds a diff image
-        #TODO: add attributes pointing to the associated static
-        # sky 'search' image and template. Maybe read them in as well?
+    def __init__(self, diffim_fitsfilename,
+                 searchim_fitsfilename=None,
+                 templateim_fitsfilename=None):
+        """Read in a triplet of three FITS files that hold
+        A. a difference image
+        B. a 'search' image (typically a "new" single-epoch static sky image)
+        C. the template image (or 'reference')
+
+        The diff image was constructed as the subtraction of the search minus
+        the template:   A = B - C
+        Generally this is not a straight subtraction operation, as we apply
+        PSF convolution or other data modification with something like the
+        Alard & Lupton or ZOGY algorithm.
+
+        """
+        # Read in the three fits files that hold the diff images
+        self.diffim = FitsImage(diffim_fitsfilename)
+        if searchim_fitsfilename:
+            self.searchim = FitsImage(searchim_fitsfilename)
+        if templateim_fitsfilename:
+            self.templateim = FitsImage(templateim_fitsfilename)
         return
 
-    def has_epsf_model(self):
-        """Check if an ePSF model exists as a FITS extension."""
-        return
+    @property
+    def has_epsfmodel(self):
+        """True if both the diffim and searchim have an ePSF model.
+        Otherwise False.
+        """
+        if ( self.diffim.psfmodel is not None and
+            self.searchim.psfmodel is not None ):
+            return ( type(self.diffim.psfmodel) == FakePlanterEPSFModel and
+                     type(self.searchim.psfmodel) == FakePlanterEPSFModel)
+        return False
 
     def build_epsf_model(self):
         """Function for constructing an effective point spread function model
         from the stars in the static sky image.
         """
+        # TODO : absorb build_ePSF.py module to here
         # identify stars in the static sky image by making a query to
         # the online Gaia database
 
@@ -40,6 +90,7 @@ class fakesnplanter(object):
     def plant_fakes(self):
         """Function for planting fake stars in the diff image.
         """
+        # TODO : absorb plant_fakes.py module to here
         # using the ePSF model embedded in the fits file, plant a grid
         # of fakes or plant fakes around galaxies with varying magnitudes
         # (fluxes), mimicking strong-lensing sources
@@ -63,6 +114,8 @@ class fakesnplanter(object):
         """Detect sources (transient candidates) in the diff image using
         the astropy.photutils threshold-based source detection algorithm.
         """
+        # TODO : absorb detect_sources.py module to here
+
         # use an astropy threshold detection algorithm to identify transient
         # source candidates in the diff image fits file
 
@@ -78,4 +131,3 @@ class fakesnplanter(object):
         # maybe separate?: run PSF fitting photometry on each fake source
         return
 
-    
