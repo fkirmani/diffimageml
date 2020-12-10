@@ -15,5 +15,5 @@ Summary
 
 |
 
-.. automodule:: diffimageml.fakesnplanter.
+.. automodule:: diffimageml.fakesnplanter
    :members:

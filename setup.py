@@ -36,7 +36,7 @@ PACKAGENAME='diffimageml'
 
 # Add the project-global data
 #data_files = []
-#for dataFolderName in ['[]']:
+#for dataFolderName in ['test_data']:
 #  pkgdatadir = os.path.join(PACKAGENAME, dataFolderName)
 #  data_files.extend(recursive_glob(pkgdatadir, '*'))
 
