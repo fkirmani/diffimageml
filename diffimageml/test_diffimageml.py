@@ -157,7 +157,7 @@ def test_diffimageml():
 		
 	try:
 		if not _DOFAST_:
-			print ("Testing Host Galaxy Detection")
+			print ("Testing Host Galaxy Detection...", end='')
 			total += 1
 			test_host_galaxy_detection(Image=FitsImage_Instance)
 		print ("Passed!")
