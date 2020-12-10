@@ -145,6 +145,46 @@ class FitsImage:
 
         self.sourcecatalog = cat 
         return self.sourcecatalog
+        
+    def detect_host_galaxies(self , target_x , target_y , pixel_coords = True):
+        """Detect sources  in the sky image using the astropy.photutils threshold-based
+         source detection algorithm to get data on the host galaxies.  
+         '''
+
+        Parameters
+        ----------
+
+        target_x : float
+            Either the x pixel coordinate or the ra for the host galaxy
+        target_y : float
+            Either the y pixel coordinate or the dec for the host galaxy
+        pixel_coords: bool
+            If true, input coordinates are assumed to be pixel coords
+            
+        Returns
+        -------
+        
+        self.hostgalaxies : array : contains information on all host galaxies in the image
+        """
+        
+        ##TODO
+        
+        ##Add support to identify galaxies in the image
+        
+        
+        if not self.has_detections():
+            self.detect_sources()
+        hostgalaxies = []
+        for i in self.sourcecatalog:
+            x=i.xcentroid.value
+            y=i.ycentroid.value
+            if abs(x - target_x) < 10  and abs(y - target_y) < 10:
+                hostgalaxies.append(i)
+                break
+        
+        self.hostgalaxies = hostgalaxies
+        return self.hostgalaxies
+            
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
@@ -223,6 +263,3 @@ class FakePlanter:
         # planted in the image
 
         return
-
-
-
