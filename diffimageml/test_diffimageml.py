@@ -72,7 +72,25 @@ def test_FitsImageClass():
 def test_source_detection(FitsImageTest):
 	source_catalog = FitsImageTest.detect_sources()
 	return FitsImageTest.has_detections()
-
+ 
+def test_host_galaxy_detection(Image=None):
+	import numpy as np
+	if Image == None:
+		SkyImageClassInstance=diffimageml.FitsImage(_SEARCHIM1_)
+		SkyImageClassInstance.detect_sources()
+	elif not Image.has_detections():
+		Image.detect_sources()
+		SkyImageClassInstance = Image
+	else:
+		SkyImageClassInstance = Image
+	pixel_x = 2012
+	pixel_y = 2056
+	SkyImageClassInstance.detect_host_galaxies(pixel_x , pixel_y)
+	assert(len(SkyImageClassInstance.hostgalaxies) == 1)
+	host_x = SkyImageClassInstance.hostgalaxies[0].xcentroid.value
+	host_y = SkyImageClassInstance.hostgalaxies[0].ycentroid.value
+	assert( np.sqrt( (pixel_x - host_x) ** 2 + (pixel_y - host_y) ** 2 ) < 10)
+	
 def test_diffimageml():
 	if _DOFAST_:
 		print("SKIPPING SLOW TESTS")
@@ -136,6 +154,18 @@ def test_diffimageml():
 		print('Failed')
 		print(traceback.format_exc())
 		failed+=1
+		
+	try:
+		if not _DOFAST_:
+			print ("Testing Host Galaxy Detection...", end='')
+			total += 1
+			test_host_galaxy_detection(Image=FitsImage_Instance)
+		print ("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed += 1
+	
 
 	print('Passed %i/%i tests.'%(total-failed,total))
 
