@@ -7,6 +7,7 @@ from astropy.io import ascii,fits
 from astropy.wcs import WCS, utils as wcsutils
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.convolution import Gaussian2DKernel
+from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
 
 from photutils import Background2D, MedianBackground, detect_threshold,detect_sources,source_properties
 from photutils.psf import EPSFModel
@@ -91,6 +92,27 @@ class FitsImage:
             return self.hdulist, self.hdulist[0]
         # TODO : remove the return statemens after confirming that no calling
         # functions need them.
+        
+    def pixtosky(self,pixel):
+        """
+        Given a pixel location returns the skycoord
+        """
+        hdu = self.hdu
+        hdr = hdu.header
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
+        xp,yp = pixel
+        sky = pixel_to_skycoord(xp,yp,wcs)
+        return sky
+
+    def skytopix(self,sky):
+        """
+        Given a skycoord (or list of skycoords) returns the pixel locations
+        """
+        hdu = self.hdu
+        hdr = hdu.header
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
+        pixel = skycoord_to_pixel(sky,wcs)
+        return pixel
 
 
 
@@ -181,6 +203,7 @@ class FitsImage:
             Either the y pixel coordinate or the dec for the host galaxy
         pixel_coords: bool
             If true, input coordinates are assumed to be pixel coords
+        Sky coordinates will be assumed to be in degrees if units are not provided
             
         Returns
         -------
@@ -188,6 +211,16 @@ class FitsImage:
         self.hostgalaxies : array : contains information on all host galaxies in the image
         """
         
+        if not pixel_coords:
+            ##Set units to degrees unless otherwise specified
+            if type(pixel_coords) != u.quantity.Quantity:
+                target_x *= u.deg
+                target_y *= u.deg
+            C = SkyCoord(target_x,target_y)
+            ##Convert to pixel coordinates
+            pix = self.skytopix(C)
+            target_x = pix[0]
+            target_y = pix[1]
         ##TODO
         
         ##Add support to identify galaxies in the image
