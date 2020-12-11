@@ -1,13 +1,23 @@
 import numpy as np
 
+import astropy
+from astropy.coordinates import SkyCoord
+from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
+from astropy.table import Table,Column,Row,vstack,setdiff,join
 from astroquery.gaia import Gaia
 from astropy.io import ascii,fits
 from astropy.wcs import WCS
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.convolution import Gaussian2DKernel
 
+import photutils
+from photutils.datasets import make_gaussian_sources_image
 from photutils import Background2D, MedianBackground, detect_threshold,detect_sources,source_properties
 from photutils.psf import EPSFModel
+
+import itertools
+import copy
+
 
 class FakePlanterEPSFModel(EPSFModel):
     """ A class for holding an effective PSF model."""
@@ -174,6 +184,12 @@ class FakePlanter:
             self.searchim = FitsImage(searchim_fitsfilename)
         if templateim_fitsfilename:
             self.templateim = FitsImage(templateim_fitsfilename)
+
+        # has_fakes False until run plant_fakes
+        self.has_fakes = False
+        # has_lco_epsf False until run lco_epsf
+        self.has_lco_epsf = False
+
         return
 
     @property
@@ -204,13 +220,11 @@ class FakePlanter:
 
     def has_fakes(self):
         """Check if fake stars have been planted in the image"""
-        return
+        return self.has_fakes
 
-
-    def plant_fakes(self):
+    def plant_fakes(self,epsf,locations,SCA=None,writetodisk=False,saveas="planted.fits"):
         """Function for planting fake stars in the diff image.
         """
-        # TODO : absorb plant_fakes.py module to here
         # using the ePSF model embedded in the fits file, plant a grid
         # of fakes or plant fakes around galaxies with varying magnitudes
         # (fluxes), mimicking strong-lensing sources
@@ -222,7 +236,63 @@ class FakePlanter:
         # a new fits file record in the image db that fakes have been
         # planted in the image
 
-        return
+        hdu = self.diffim.hdu # the fits opened difference image hdu
 
+        # copying so can leave original data untouched
+        cphdu = hdu.copy()
+        cpim = cphdu.data
+        cphdr = cphdu.header
+        
+        wcs,frame = WCS(cphdr),cphdr['RADESYS'].lower()
+        
+        # location should be list of pixels [(x1,y1),(x2,y2)...(xn,yn)]
+        n = 0
+        for pix in locations:
+            pix = list(pix)
+            xp,yp = pix
+            sky = pixel_to_skycoord(xp,yp,wcs)
+            idx = str(n).zfill(3) 
+            cphdr['FK{}X'.format(idx)] = xp
+            cphdr['FK{}Y'.format(idx)] = yp
+            cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+            cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
 
+            if SCA:
+                # SCA ~ scaling factor for epsf, epsf*sca, needs to be list of floats same length as locations 
+                sca = SCA[n]
+                epsfn = epsf*sca
+            else:
+                # SCA ~ None, all the same brightness of input epsf
+                sca = 1
+                epsfn = epsf*sca
+            cphdr['FK{}SCA'.format(idx)] = sca
+            cphdr['FK{}F'.format(idx)] = np.sum(epsfn)
 
+            # TO-DO, once have actual epsf classes will be clearer to fill the model
+            cphdr['FK{}MOD'.format(idx)] = "NA"
+
+            revpix = copy.copy(pix)
+            revpix.reverse()
+            row,col=revpix
+            nrows,ncols=epsf.shape
+            # +2 in these to grab a couple more than needed, the correct shapes for broadcasting taken using actual psf.shapes
+            rows=np.arange(int(np.round(row-nrows/2)),int(np.round(row+nrows/2))+2) 
+            cols=np.arange(int(np.round(col-ncols/2)),int(np.round(col+ncols/2))+2) 
+            rows = rows[:epsf.shape[0]]
+            cols = cols[:epsf.shape[1]]
+            cpim[rows[:, None], cols] += epsfn
+            np.float64(cpim)
+
+            n+=1
+        
+        # inserting some new header values
+        cphdr['fakeSN']=True 
+        cphdr['N_fake']=str(len(locations))
+        cphdr['F_epsf']=str(np.sum(epsf))
+        
+        if writetodisk:
+            fits.writeto(saveas,cpim,cphdr,overwrite=True)
+        
+        self.has_fakes = True # if makes it through this plant_fakes update has_fakes
+
+        return cphdu
