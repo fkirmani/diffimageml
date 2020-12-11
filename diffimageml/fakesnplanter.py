@@ -1,6 +1,7 @@
 import numpy as np
 
 import astropy
+from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
 from astropy.table import Table,Column,Row,vstack,setdiff,join
@@ -17,7 +18,6 @@ from photutils.psf import EPSFModel
 
 import itertools
 import copy
-
 
 class FakePlanterEPSFModel(EPSFModel):
     """ A class for holding an effective PSF model."""
@@ -71,18 +71,58 @@ class FitsImage:
         hdu : :class:`~astropy.io.fits.PrimaryHDU` (or similar)
 
         """
-        hdulist = fits.open(fitsfilename)
+        self.hdulist = fits.open(fitsfilename)
         self.filename = fitsfilename
+        if 'SCI' in self.hdulist:
+            self.sci = self.hdulist['SCI']
+        else:
+            for i in range(len(self.hdulist)):
+                if self.hdulist[i].data is not None:
+                    self.sci = self.hdulist[i]
+
+        # image World Coord System
+        self.wcs = WCS(self.sci.header)
+
+        # Sky coordinate frame
+        # TODO : Not sure we can expect the RADESYS keyword is always present.
+        # Maybe there's an astropy function to get this in a more general way?
+        self.frame = self.sci.header['RADESYS'].lower()
+
         # TODO
         #
         #Let's make sure that this is 
         #true in general, or change if not.
         #
         if fitsfilename.endswith('fz'):
-            return hdulist, hdulist[1]
+            return self.hdulist, self.hdulist[1]
         else:
-            return hdulist, hdulist[0]
+            return self.hdulist, self.hdulist[0]
+        # TODO : remove the return statemens after confirming that no calling
+        # functions need them.
         
+    def pixtosky(self,pixel):
+        """
+        Given a pixel location returns the skycoord
+        """
+        hdu = self.hdu
+        hdr = hdu.header
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
+        xp,yp = pixel
+        sky = pixel_to_skycoord(xp,yp,wcs)
+        return sky
+
+    def skytopix(self,sky):
+        """
+        Given a skycoord (or list of skycoords) returns the pixel locations
+        """
+        hdu = self.hdu
+        hdr = hdu.header
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
+        pixel = skycoord_to_pixel(sky,wcs)
+        return pixel
+
+
+
     def has_detections(self):
         """Check if a list of detected sources exists """
         return self.sourcecatalog is not None
@@ -155,6 +195,117 @@ class FitsImage:
 
         self.sourcecatalog = cat 
         return self.sourcecatalog
+        
+    def detect_host_galaxies(self , target_x , target_y , pixel_coords = True):
+        """Detect sources  in the sky image using the astropy.photutils threshold-based
+         source detection algorithm to get data on the host galaxies.  
+         '''
+
+        Parameters
+        ----------
+
+        target_x : float
+            Either the x pixel coordinate or the ra for the host galaxy
+        target_y : float
+            Either the y pixel coordinate or the dec for the host galaxy
+        pixel_coords: bool
+            If true, input coordinates are assumed to be pixel coords
+        Sky coordinates will be assumed to be in degrees if units are not provided
+            
+        Returns
+        -------
+        
+        self.hostgalaxies : array : contains information on all host galaxies in the image
+        """
+        
+        if not pixel_coords:
+            ##Set units to degrees unless otherwise specified
+            if type(pixel_coords) != u.quantity.Quantity:
+                target_x *= u.deg
+                target_y *= u.deg
+            C = SkyCoord(target_x,target_y)
+            ##Convert to pixel coordinates
+            pix = self.skytopix(C)
+            target_x = pix[0]
+            target_y = pix[1]
+        ##TODO
+        
+        ##Add support to identify galaxies in the image
+        
+        
+        if not self.has_detections():
+            self.detect_sources()
+        hostgalaxies = []
+        for i in self.sourcecatalog:
+            x=i.xcentroid.value
+            y=i.ycentroid.value
+            if abs(x - target_x) < 10  and abs(y - target_y) < 10:
+                hostgalaxies.append(i)
+                break
+        
+        self.hostgalaxies = hostgalaxies
+        return self.hostgalaxies
+
+    def fetch_gaia_sources(self, save_suffix=None):
+        #TODO: set default save_suffix='GaiaCat'):
+        """Using astroquery, download a list of sources from the Gaia
+         catalog that are within the bounds of this image.
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            If None, do not save to disk. If provided, save the Gaia source
+            catalog to an ascii text file named as
+             <name_of_this_fits_file>_<save_suffix>.txt
+
+        Sets
+        -------
+        self.gaia_catalog : Astropy Table : contains information on all
+        Gaia sources in the image
+
+        """
+        # TODO : when save_suffix is provided, check first to see if a
+        #  catalog exists, and load the sources from there
+
+        # coord of central reference pixel
+        ra_ref = self.sci.header['CRVAL1']
+        dec_ref = self.sci.header['CRVAL2']
+        coord = SkyCoord(ra_ref, dec_ref, unit=(u.hourangle,u.deg))
+
+        ## Compute the pixel scale in units of arcseconds, from the CD matrix
+        #cd11 = self.sci.header['CD1_1'] # deg/pixel
+        #cd12 = self.sci.header['CD1_2'] # deg/pixel
+        #cd21 = self.sci.header['CD2_1'] # deg/pixel
+        #cd22 = self.sci.header['CD2_2'] # deg/pixel
+        #cdmatrix = [[cd11,cd12],[cd21,cd22]]
+        #pixelscale = np.sqrt(np.abs(np.linalg.det(cdmatrix))) * u.deg
+        pixelscale = np.sqrt(wcsutils.proj_plane_pixel_area(self.wcs))
+
+        # compute the width and height of the image from the NAXIS keywords
+        naxis1 = self.sci.header['NAXIS1']
+        naxis2 = self.sci.header['NAXIS2']
+        width = naxis1 * pixelscale * u.deg
+        height = naxis2 * pixelscale * u.deg
+
+        # Do the search. Returns an astropy Table
+        self.gaia_source_table = Gaia.query_object_async(
+            coordinate=coord, width=width, height=height)
+
+        # TODO : saving to file not yet debugged
+        if save_suffix:
+            savefilename = os.path.split_ext(self.fitsfilename)[0] +\
+                           '_' + save_suffix + '.txt'
+            if os.path.exists(savefilename):
+                os.remove(savefilename)
+            # TODO : make more space-efficient as a binary table?
+            self.gaia_source_table.write(
+                savefilename, format='ascii.fixed_width')
+            self.gaia_source_table.savefilename = savefilename
+
+        return
+
+            
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
@@ -189,7 +340,7 @@ class FakePlanter:
         self.has_fakes = False
         # has_lco_epsf False until run lco_epsf
         self.has_lco_epsf = False
-
+        
         return
 
     @property
