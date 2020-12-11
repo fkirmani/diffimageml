@@ -24,7 +24,7 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
 	_SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_DOFAST_ = True # False # Use this to skip slow tests
+_DOFAST_ = False # Use this to skip slow tests
 
 def test_pristine_data():
 	"""
@@ -107,7 +107,17 @@ def test_host_galaxy_detection(Image=None):
 		SkyImageClassInstance = Image
 	pixel_x = 2012
 	pixel_y = 2056
+	ra = 17.3905276
+	dec = 15.0091647
+	###Tests detect host galaxies with pixel coords
 	SkyImageClassInstance.detect_host_galaxies(pixel_x , pixel_y)
+	assert(len(SkyImageClassInstance.hostgalaxies) == 1)
+	host_x = SkyImageClassInstance.hostgalaxies[0].xcentroid.value
+	host_y = SkyImageClassInstance.hostgalaxies[0].ycentroid.value
+	assert( np.sqrt( (pixel_x - host_x) ** 2 + (pixel_y - host_y) ** 2 ) < 10)
+	
+	##Tests detect host galaxies with sky coords
+	SkyImageClassInstance.detect_host_galaxies(ra , dec , pixel_coords = False)
 	assert(len(SkyImageClassInstance.hostgalaxies) == 1)
 	host_x = SkyImageClassInstance.hostgalaxies[0].xcentroid.value
 	host_y = SkyImageClassInstance.hostgalaxies[0].ycentroid.value
