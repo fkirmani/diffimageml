@@ -1,8 +1,10 @@
 import numpy as np
 
+from astropy import units as u
 from astroquery.gaia import Gaia
+from astropy.coordinates import SkyCoord
 from astropy.io import ascii,fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, utils as wcsutils
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.convolution import Gaussian2DKernel
 
@@ -61,18 +63,37 @@ class FitsImage:
         hdu : :class:`~astropy.io.fits.PrimaryHDU` (or similar)
 
         """
-        hdulist = fits.open(fitsfilename)
+        self.hdulist = fits.open(fitsfilename)
         self.filename = fitsfilename
+        if 'SCI' in self.hdulist:
+            self.sci = self.hdulist['SCI']
+        else:
+            for i in range(len(self.hdulist)):
+                if self.hdulist[i].data is not None:
+                    self.sci = self.hdulist[i]
+
+        # image World Coord System
+        self.wcs = WCS(self.sci.header)
+
+        # Sky coordinate frame
+        # TODO : Not sure we can expect the RADESYS keyword is always present.
+        # Maybe there's an astropy function to get this in a more general way?
+        self.frame = self.sci.header['RADESYS'].lower()
+
         # TODO
         #
         #Let's make sure that this is 
         #true in general, or change if not.
         #
         if fitsfilename.endswith('fz'):
-            return hdulist, hdulist[1]
+            return self.hdulist, self.hdulist[1]
         else:
-            return hdulist, hdulist[0]
-        
+            return self.hdulist, self.hdulist[0]
+        # TODO : remove the return statemens after confirming that no calling
+        # functions need them.
+
+
+
     def has_detections(self):
         """Check if a list of detected sources exists """
         return self.sourcecatalog is not None
@@ -184,6 +205,66 @@ class FitsImage:
         
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
+
+    def fetch_gaia_sources(self, save_suffix=None):
+        #TODO: set default save_suffix='GaiaCat'):
+        """Using astroquery, download a list of sources from the Gaia
+         catalog that are within the bounds of this image.
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            If None, do not save to disk. If provided, save the Gaia source
+            catalog to an ascii text file named as
+             <name_of_this_fits_file>_<save_suffix>.txt
+
+        Sets
+        -------
+        self.gaia_catalog : Astropy Table : contains information on all
+        Gaia sources in the image
+
+        """
+        # TODO : when save_suffix is provided, check first to see if a
+        #  catalog exists, and load the sources from there
+
+        # coord of central reference pixel
+        ra_ref = self.sci.header['CRVAL1']
+        dec_ref = self.sci.header['CRVAL2']
+        coord = SkyCoord(ra_ref, dec_ref, unit=(u.hourangle,u.deg))
+
+        ## Compute the pixel scale in units of arcseconds, from the CD matrix
+        #cd11 = self.sci.header['CD1_1'] # deg/pixel
+        #cd12 = self.sci.header['CD1_2'] # deg/pixel
+        #cd21 = self.sci.header['CD2_1'] # deg/pixel
+        #cd22 = self.sci.header['CD2_2'] # deg/pixel
+        #cdmatrix = [[cd11,cd12],[cd21,cd22]]
+        #pixelscale = np.sqrt(np.abs(np.linalg.det(cdmatrix))) * u.deg
+        pixelscale = np.sqrt(wcsutils.proj_plane_pixel_area(self.wcs))
+
+        # compute the width and height of the image from the NAXIS keywords
+        naxis1 = self.sci.header['NAXIS1']
+        naxis2 = self.sci.header['NAXIS2']
+        width = naxis1 * pixelscale * u.deg
+        height = naxis2 * pixelscale * u.deg
+
+        # Do the search. Returns an astropy Table
+        self.gaia_source_table = Gaia.query_object_async(
+            coordinate=coord, width=width, height=height)
+
+        # TODO : saving to file not yet debugged
+        if save_suffix:
+            savefilename = os.path.split_ext(self.fitsfilename)[0] +\
+                           '_' + save_suffix + '.txt'
+            if os.path.exists(savefilename):
+                os.remove(savefilename)
+            # TODO : make more space-efficient as a binary table?
+            self.gaia_source_table.write(
+                savefilename, format='ascii.fixed_width')
+            self.gaia_source_table.savefilename = savefilename
+
+        return
+
             
 
 class FakePlanter:

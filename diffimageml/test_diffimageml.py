@@ -1,11 +1,14 @@
 ##Test File
 import sys,os,traceback
 from copy import deepcopy
+from astropy.table import Table
+
 _SRCDIR_ = os.path.abspath(os.path.join(
 	os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
 import diffimageml
-print(_SRCDIR_)
+
+
 # Hard coding the test data filenames
 _DIFFIM1_ = os.path.abspath(os.path.join(
 	_SRCDIR_, 'diffimageml', 'test_data', 'diff_pydia_1.fits.fz'))
@@ -21,7 +24,7 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
 	_SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_DOFAST_ = False # Use this to skip slow tests
+_DOFAST_ = True # False # Use this to skip slow tests
 
 def test_pristine_data():
 	"""
@@ -37,6 +40,25 @@ def test_pristine_data():
 	assert os.path.isfile(_TEMPLATEIM2_)
 
 	return 1
+
+def test_fetch_gaia_sources():
+	""" Check that an astroquery call to the Gaia db works"""
+	# read in a fits file
+	searchim1 = diffimageml.fakeplanting.FitsImage(_SEARCHIM1_)
+
+	# fetch gaia data
+	# NOte: we adjust the save_suffix so we can test saving of the output to
+	# a file, but it will not conflict  with existence of a pre-baked gaia
+	# catalog test file with the default suffix GaiaCat
+	searchim1.fetch_gaia_sources(save_suffix=None)#'TestGaiaCat')
+
+	# TODO : more informative test output?
+	assert type(searchim1.gaia_source_table) == Table
+	assert len(searchim1.gaia_source_table) > 0
+	#assert os.path.isfile(searchim1.gaia_source_table.savefilename)
+
+	return 1
+
 
 def test_fakeplanter_class():
 	"""Create a FakePlanter object from the pristine (level 0) test data"""
@@ -109,9 +131,20 @@ def test_diffimageml():
 		failed+=1
 
 	try:
+		if not _DOFAST_:
+		    print('Testing Gaia astroquery...', end='')
+		    total += 1
+		    test_fetch_gaia_sources()
+		    print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+
+	try:
 		print('Testing FakePlanter instantiation...', end='')
 		total += 1
-		test_fakeplanter_class()
+		#test_fakeplanter_class()
 		print("Passed!")
 	except Exception as e:
 		print('Failed')
