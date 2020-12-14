@@ -23,6 +23,8 @@ from photutils import EllipticalAperture, detect_threshold, deblend_sources
 
 import itertools
 import copy
+import pickle
+
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'

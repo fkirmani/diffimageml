@@ -24,7 +24,7 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
     _SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_GOFAST_ = False # Use this to skip slow tests
+_GOFAST_ = True # Use this to skip slow tests
 
 def test_pristine_data():
     """
@@ -84,7 +84,7 @@ def test_build_epsf_model(verbose=True):
     assert(fitsimageobject.epsf.data.sum()>0)
 
     # read in the ePSF model we just created
-    fistimageobject.read_epsf_model(save_suffix='TestEPSFModel')
+    fitsimageobject.read_epsf_model(save_suffix='TestEPSFModel')
     assert(fitsimageobject.epsf is not None)
     assert(fitsimageobject.epsf.data.sum()>0)
 
@@ -205,7 +205,7 @@ def test_diffimageml():
         failed+=1
 
     try:
-        if not _GOFAST_:
+        if True: #not _GOFAST_:
             print('Testing ePSF model construction...', end='')
             total += 1
             test_build_epsf_model()
