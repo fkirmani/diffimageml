@@ -59,10 +59,21 @@ def test_fetch_gaia_sources():
 
 	return 1
 
-def test_build_epsf_model(fakeplanterobject):
+def test_measure_zeropoint():
+	"""Check measuring of zeropoint from known stars in the image"""
+	fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
+	# TODO: must also get gaia sources, but that's a separate test, should
+	#  do them in series, and pass the object along?
+	fitsimageobject.measure_zeropoint()
+	assert(fitsimageobject.zeropoint is not None)
+	return
+
+def test_build_epsf_model():
 	"""Check construction of an ePSF model
 	from Gaia stars.
 	"""
+	fakeplanterobject = diffimageml.FakePlanter(
+		_DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
 	fakeplanterobject.build_epsf_model()
 	assert(fakeplanterobject.has_epsf_model)
 	return
@@ -158,6 +169,17 @@ def test_diffimageml():
 		print('Failed')
 		print(traceback.format_exc())
 		failed+=1
+
+	try:
+		print('Testing measure the zeropoint from known stars...', end='')
+		total += 1
+		test_measure_zeropoint()
+		print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+
 
 	try:
 		if not _DOFAST_:
