@@ -68,24 +68,21 @@ def test_measure_zeropoint():
     assert(fitsimageobject.zeropoint is not None)
     return
 
-def test_build_epsf_model():
-    """Check construction of an ePSF model
-    from Gaia stars.
+def test_build_epsf_model(verbose=True):
+    """Check construction of an ePSF model from Gaia stars.
     """
-    epsfmodelobject = diffimageml.FakePlanterEPSFModel()
-
-    # TODO: read in a fits image (should inherit from upstream)
     fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
 
-    # TODO : get Gaia stars (should inherit from upstream)
-    fitsimageobject.fetch_gaia_sources(save_suffix=None)#'TestGaiaCat')
+    # Fetch gaia sources (read from disk if possible)
+    fitsimageobject.fetch_gaia_sources(save_suffix='TestGaiaCat')
 
+    # Build the ePSF model
     # TODO : make the output file, then delete it?
-    epsfmodelobject.build_epsf_model(
+    fitsimageobject.build_epsf_model(
         fitsimageobject, fitsimageobject.gaia_source_table,
-        outfilename='test_epsf.fits'
-    )
-    assert(epsfmodelobject.epsf is not None)
+        outfilename='test_epsf.fits',
+        verbose=verbose)
+    assert(fitsimageobject.epsf is not None)
     return
 
 
@@ -162,7 +159,7 @@ def test_host_galaxy_detection(Image=None):
 
 def test_diffimageml():
     if _GOFAST_:
-        print("SKIPPING SLOW TESTS")
+        print("GO FAST!  SKIPPING SLOW TESTS")
     failed=0
     total=0
     # Fill in tests here.  Put a separate try/except around each test and track
@@ -178,8 +175,19 @@ def test_diffimageml():
         failed+=1
 
     try:
-        #if not _GOFAST_:
-        if True:
+        FitsImage_Instance = None
+        print('Testing FitsImage instantiation...', end='')
+        total += 1
+        FitsImage_Instance = test_FitsImageClass()
+        print("Passed!")
+    except Exception as e:
+        print('Failed')
+        print(traceback.format_exc())
+        failed+=1
+
+
+    try:
+        if not _GOFAST_:
             print('Testing Gaia astroquery...', end='')
             total += 1
             test_fetch_gaia_sources()
@@ -199,9 +207,10 @@ def test_diffimageml():
         print(traceback.format_exc())
         failed+=1
 
-
+    # SR single-unit-testing calls while debugging
+    #test_fetch_gaia_sources()
+    #test_build_epsf_model()
     try:
-        #if True:
         if not _GOFAST_:
             print('Testing ePSF model construction...', end='')
             total += 1
@@ -215,7 +224,7 @@ def test_diffimageml():
     try:
         print('Testing FakePlanter instantiation...', end='')
         total += 1
-        #test_fakeplanter_class()
+        test_fakeplanter_class()
         print("Passed!")
     except Exception as e:
         print('Failed')
@@ -233,16 +242,6 @@ def test_diffimageml():
         print(traceback.format_exc())
         failed+=1
 
-    try:
-        FitsImage_Instance = None
-        print('Testing FitsImage instantiation...', end='')
-        total += 1
-        FitsImage_Instance = test_FitsImageClass()
-        print("Passed!")
-    except Exception as e:
-        print('Failed')
-        print(traceback.format_exc())
-        failed+=1
 
     try:
         if not _GOFAST_:
