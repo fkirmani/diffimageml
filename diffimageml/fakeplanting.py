@@ -7,6 +7,7 @@ from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.convolution import Gaussian2DKernel
 from astropy.io import ascii,fits
+from astropy.nddata import Cutout2D,NDData
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.table import Table,Column,MaskedColumn,Row,vstack,setdiff,join
 from astropy.wcs import WCS, utils as wcsutils
@@ -29,6 +30,11 @@ _GAIACATFORMAT_ = 'ascii.ecsv'
 # Column names for the magnitudes and S/N to use for selecting viable PSF stars
 _GAIAMAGCOL_ =  'phot_rp_mean_mag'
 _GAIASNCOL_ = 'phot_rp_mean_flux_over_error'
+
+# Size of the box for each PSF star cutout (half width? or full?)
+#  Does this also set the size of the resulting ePSF model?
+_PSFSTARCUTOUTSIZE_ = 25 # pixels
+
 
 class FakePlanterEPSFModel():
     """ A class for holding an effective PSF model.
@@ -302,7 +308,7 @@ class FitsImage:
         #  catalog exists, and load the sources from there
         if save_suffix:
             root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-            savefilename = root + '_' + save_suffix + '.txt'
+            savefilename = root + '_' + save_suffix + '.ecsv'
             if os.path.isfile(savefilename) and not overwrite:
                 print("Gaia catalog {} exists. \n".format(savefilename) + \
                       "Reading without fetching.")
@@ -455,10 +461,11 @@ class FitsImage:
         if verbose:
             print('{} stars, after removing intersections'.format(len(gaiacat)))
 
-        # I am going to extract stars with strong signal in rp filter (the one lco is looking in)
-        gaiacat = gaiacat[gaiacat['signal_to_noise']>100]
+        # Limit to just stars with very good S/N
+        gaiacat_trimmed = gaiacat[gaiacat['signal_to_noise']>100]
         if verbose:
-            print('restricting extractions to stars w rp flux/error > 100 we have {} to consider'.format(len(gaiacat)))
+            print('restricting extractions to stars w/ S/N > 100' 
+                  'we have {} to consider'.format(len(gaiacat_trimmed)))
 
         # TODO? sort by the strongest signal/noise in r' filter
         # r.sort('phot_rp_mean_flux_over_error')
@@ -482,9 +489,10 @@ class FitsImage:
         # need bkg subtracted to extract stars, want to build ePSF using just star brightness
         data -= median_val # L1med
         nddata = NDData(data=data)
-        psfstars_extracted = extract_stars(nddata,catalogs=gaiacat, size=25)
-        # using the bbox of each star from results to determine intersections, dont want confusion of multi-stars for ePSF
-        # this was done with all stars not just those extracted, this is an optional sanity check but don't need it
+        psfstars_extracted = extract_stars(nddata, catalogs=gaiacat,
+                                           size=_PSFSTARCUTOUTSIZE_)
+        # using the bbox of each star from results to determine intersections,
+        # we don't want confusion of blended stars in our ePSF
         intersections = []
         for i,obj1 in enumerate(psfstars_extracted.bbox):
             for j in range(i+1,len(psfstars_extracted.bbox)):
@@ -499,17 +507,21 @@ class FitsImage:
         for i in tmp:
             if i.bbox in intersections:
                 tmp.remove(i)
-        #print('{} stars, after removing intersections'.format(len(tmp)))
+        if verbose:
+            print('{} stars, after removing intersections'.format(len(tmp)))
 
-
-        # note ref.fits doesn't have saturate and maxlin available the image should be just one of the trims
+        # note ref.fits doesn't have saturate and maxlin available
+        # the image should be just one of the trims
         for i in tmp:
             if np.max(i.data) > saturate:
                 tmp.remove(i)
             elif np.max(i.data) > maxlin:
                 tmp.remove(i)
 
-        print('removed stars above saturation or non-linearity level ~ {}, {} ADU; now have {}'.format(saturate,maxlin,len(tmp)))
+        if verbose:
+            print('removed stars above saturation or non-linearity level'
+                  '~ {}, {} ADU; now have {}'.format(
+                saturate,maxlin,len(tmp)))
         psf_stars_selected = photutils.psf.EPSFStars(tmp)
 
         """
@@ -527,13 +539,16 @@ class FitsImage:
 
         return
 
-    def build_epsf_model(self, fitsimage, starcoordinates,
+    def build_epsf_model(self, fitsimage,
                          outfilename='psf.fits', oversampling=2,
                          verbose=False):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
         non-linearity/saturation
         """
+        # TODO: check for existence of gaia source table and fetch/read it if needed
+        #starcoordinates = fitsimage.gaia_source_table
+
         #TODO: whittle down to just the good stars (below saturation)
         self.extract_psf_stars(verbose=verbose)
         assert(self.psfstars is not None)

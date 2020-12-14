@@ -77,9 +77,10 @@ def test_build_epsf_model(verbose=True):
     fitsimageobject.fetch_gaia_sources(save_suffix='TestGaiaCat')
 
     # Build the ePSF model
+    # TODO : Make a better name for the output file.
     # TODO : make the output file, then delete it?
     fitsimageobject.build_epsf_model(
-        fitsimageobject, fitsimageobject.gaia_source_table,
+        fitsimageobject,
         outfilename='test_epsf.fits',
         verbose=verbose)
     assert(fitsimageobject.epsf is not None)
@@ -207,9 +208,6 @@ def test_diffimageml():
         print(traceback.format_exc())
         failed+=1
 
-    # SR single-unit-testing calls while debugging
-    #test_fetch_gaia_sources()
-    #test_build_epsf_model()
     try:
         if not _GOFAST_:
             print('Testing ePSF model construction...', end='')
