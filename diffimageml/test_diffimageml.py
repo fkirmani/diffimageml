@@ -1,6 +1,6 @@
 ##Test File
 import sys,os,traceback
-from copy import deepcopy
+import numpy as np
 from astropy.table import Table
 
 _SRCDIR_ = os.path.abspath(os.path.join(
@@ -107,14 +107,18 @@ def test_fakeplanter(accuracy=0.05):
     fakeplanterobject = diffimageml.FakePlanter(
         _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
 
+    epsf = diffimageml.util.lco_epsf(fakeplanterobject)
+    locations = diffimageml.util.get_lattice_positions(fakeplanterobject)
+    pixels,skycoords = locations
+
     # TODO: this is gonna need debugging
-    # TODO: is deepcopy necessary?
-    pre_imdata = deepcopy(fakeplanterobject.diffim.hdulist[1].data)
-    fakeplanterobject.plant_fakes()
-    post_imdata = fakeplanterobject.diffim.hdulist[1].data
+    pre_imdata = fakeplanterobject.diffim.sci.data
+    post_im = fakeplanterobject.plant_fakes(epsf,pixels)
+    post_imdata = post_im.data
 
     fitsflux = np.sum(post_imdata - pre_imdata)
-    epsfflux = int(planthdu.header['N_fake'])*float(planthdu.header['f_fake'])
+    # TODO: this should have SCA to stay general if plants are scaled differently
+    epsfflux = int(post_im.header['N_fake'])*float(post_im.header['F_epsf'])
     #print(fitsflux,epsfflux)
     if np.abs(fitsflux-epsfflux)/epsfflux < accuracy:
         #print("plant was successful")
