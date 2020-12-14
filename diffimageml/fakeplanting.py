@@ -7,19 +7,34 @@ from astropy import units
 from astropy.coordinates import SkyCoord
 from astropy.convolution import Gaussian2DKernel
 from astropy.io import ascii,fits
+from astropy.nddata import Cutout2D,NDData
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
-from astropy.table import Table,Column,Row,vstack,setdiff,join
+from astropy.table import Table,Column,MaskedColumn,Row,vstack,setdiff,join
 from astropy.wcs import WCS, utils as wcsutils
 
 import photutils
 from photutils.datasets import make_gaussian_sources_image
 from photutils import Background2D, MedianBackground
-from photutils import detect_sources,source_properties
+from photutils import detect_sources, source_properties
 from photutils.psf import EPSFModel, extract_stars
-from photutils import EPSFBuilder
+from photutils import EPSFBuilder, BoundingBox
+from photutils import Background2D, MedianBackground
+from photutils import EllipticalAperture, detect_threshold, deblend_sources
 
 import itertools
 import copy
+
+# astropy Table format for the gaia source catalog
+_GAIACATFORMAT_ = 'ascii.ecsv'
+
+# Column names for the magnitudes and S/N to use for selecting viable PSF stars
+_GAIAMAGCOL_ =  'phot_rp_mean_mag'
+_GAIASNCOL_ = 'phot_rp_mean_flux_over_error'
+
+# Size of the box for each PSF star cutout (half width? or full?)
+#  Does this also set the size of the resulting ePSF model?
+_PSFSTARCUTOUTSIZE_ = 25 # pixels
+
 
 class FakePlanterEPSFModel():
     """ A class for holding an effective PSF model.
@@ -42,8 +57,6 @@ class FakePlanterEPSFModel():
         """
         # TODO : add a check that zeropoint has been set by user
         return self.epsf.data * 10**(-0.4*(mag-self.zeropoint))
-
-
 
 
     def showepsfmodel(self):
@@ -269,8 +282,8 @@ class FitsImage:
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
 
-    def fetch_gaia_sources(self, save_suffix=None):
-        #TODO: set default save_suffix='GaiaCat'):
+    def fetch_gaia_sources(self, save_suffix='GaiaCat', overwrite=False,
+                           verbose=False):
         """Using astroquery, download a list of sources from the Gaia
          catalog that are within the bounds of this image.
 
@@ -282,19 +295,30 @@ class FitsImage:
             catalog to an ascii text file named as
              <name_of_this_fits_file>_<save_suffix>.txt
 
-        Sets
-        -------
+        overwrite: boolean
+            When True, fetch from the remote Gaia database even if a local
+            copy exists.  Write over the local file with the results from the
+            remote db.
+
         self.gaia_catalog : Astropy Table : contains information on all
         Gaia sources in the image
 
         """
-        # TODO : when save_suffix is provided, check first to see if a
+        #  when save_suffix is provided, check first to see if a
         #  catalog exists, and load the sources from there
+        if save_suffix:
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            savefilename = root + '_' + save_suffix + '.ecsv'
+            if os.path.isfile(savefilename) and not overwrite:
+                print("Gaia catalog {} exists. \n".format(savefilename) + \
+                      "Reading without fetching.")
+                self.read_gaia_sources(save_suffix=save_suffix)
+                return
 
         # coord of central reference pixel
         ra_ref = self.sci.header['CRVAL1']
         dec_ref = self.sci.header['CRVAL2']
-        coord = SkyCoord(ra_ref, dec_ref, unit=(units.hourangle, units.deg))
+        coord = SkyCoord(ra_ref, dec_ref, unit=(units.deg, units.deg))
 
         ## Compute the pixel scale in units of arcseconds, from the CD matrix
         #cd11 = self.sci.header['CD1_1'] # deg/pixel
@@ -312,20 +336,72 @@ class FitsImage:
         height = naxis2 * pixelscale * units.deg
 
         # Do the search. Returns an astropy Table
-        self.gaia_source_table = Gaia.query_object_async(
+        full_gaia_source_table = Gaia.query_object_async(
             coordinate=coord, width=width, height=height)
 
+        # isolate the parameters of interest: ra,dec,r_mag
+        racol = Column(data=full_gaia_source_table['ra'], name='ra')
+        deccol = Column(data=full_gaia_source_table['dec'], name='dec')
+        magcol = MaskedColumn(data=full_gaia_source_table[_GAIAMAGCOL_],
+                              name='mag')
+
+        sncol = MaskedColumn(data=full_gaia_source_table[_GAIASNCOL_],
+                              name='signal_to_noise')
+
+        # add columns  x and y (pixel locations on image)
+        #sky_positions= []
+        pixel_positions=[]
+        for i in range(len(full_gaia_source_table)):
+            sky_pos = SkyCoord(ra=racol[i], dec=deccol[i],
+                               unit=units.deg, frame=self.frame)
+            #sky_positions.append(sky_pos)
+            pixel_pos = wcsutils.skycoord_to_pixel(sky_pos, self.wcs)
+            pixel_positions.append(pixel_pos)
+        xcol = Column([pos[0] for pos in pixel_positions], name='x')
+        ycol = Column([pos[1] for pos in pixel_positions], name='y')
+
+        # create a minimalist Table
+        self.gaia_source_table = Table([racol,deccol,xcol,ycol,magcol,sncol])
+
+        if verbose:
+            print('There are {} stars available within fov '
+                  'from gaia results queried'.format(
+                len(self.gaia_source_table)))
+
         if save_suffix:
-            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-            savefilename = root + '_' + save_suffix + '.txt'
             if os.path.exists(savefilename):
                 os.remove(savefilename)
             # TODO : make more space-efficient as a binary table?
             self.gaia_source_table.write(
-                savefilename, format='ascii.fixed_width')
+                savefilename, format=_GAIACATFORMAT_)
             self.gaia_source_table.savefilename = savefilename
 
         return
+
+
+    def read_gaia_sources(self, save_suffix='GaiaCat'):
+        """Read in an existing catalog of sources from the Gaia
+         database that are within the bounds of this image.
+
+        Requires that fetch_gaia_sources() has previously been run,
+        with save_suffix provided to save the catalog as an ascii
+        text file named as <rootname_of_this_fits_file>_<save_suffix>.txt
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            The suffix of the Gaia source catalog filename.
+        """
+        root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+        catfilename = root + '_' + save_suffix + '.txt'
+        if not os.path.isfile(catfilename):
+            print("Error: {} does not exist.".format(catfilename))
+            return -1
+        self.gaia_source_table = Table.read(
+            catfilename, format=_GAIACATFORMAT_)
+        return 0
+
 
     def measure_zeropoint(self):
         """Measure the zeropoint of the image, using a set of
@@ -343,24 +419,6 @@ class FitsImage:
         gaiacat = self.gaia_source_table
         image = self.sci
 
-        # need to give the results a column name x and y (pixel locations
-        # on image) for extract stars fcn which am going to apply
-        wcs,frame = WCS(image.header),image.header['RADESYS'].lower()
-        positions,pixels=[],[]
-        for i in range(len(gaiacat)):
-            position = SkyCoord(ra=gaiacat[i]['ra'],
-                                dec=gaiacat[i]['dec'],
-                                unit=u.deg,frame=frame)
-            positions.append(position)
-            pixel=skycoord_to_pixel(position,wcs)
-            pixels.append(pixel)
-        x,y=[i[0] for i in pixels],[i[1] for i in pixels]
-        x,y=Column(x),Column(y)
-        gaiacat.add_column(x,name='x')
-        gaiacat.add_column(y,name='y')
-        if verbose:
-            print('There are {} stars available within fov '
-                  'from gaia results queried'.format(len(gaiacat)))
 
         # Define bounding boxes for the extractions so we can remove
         # any stars with overlaps. We want stars without overlaps
@@ -371,7 +429,7 @@ class FitsImage:
             x = i['x']
             y = i['y']
             size = 25
-            ixmin,ixmax = int(x - size/2), int(x + size/2)
+            ixmin, ixmax = int(x - size/2), int(x + size/2)
             iymin, iymax = int(y - size/2), int(y + size/2)
 
             bbox = BoundingBox(ixmin=ixmin, ixmax=ixmax, iymin=iymin, iymax=iymax)
@@ -403,10 +461,11 @@ class FitsImage:
         if verbose:
             print('{} stars, after removing intersections'.format(len(gaiacat)))
 
-        # I am going to extract stars with strong signal in rp filter (the one lco is looking in)
-        gaiacat = gaiacat[gaiacat['phot_rp_mean_flux_over_error']>100]
+        # Limit to just stars with very good S/N
+        gaiacat_trimmed = gaiacat[gaiacat['signal_to_noise']>100]
         if verbose:
-            print('restricting extractions to stars w rp flux/error > 100 we have {} to consider'.format(len(gaiacat)))
+            print('restricting extractions to stars w/ S/N > 100' 
+                  'we have {} to consider'.format(len(gaiacat_trimmed)))
 
         # TODO? sort by the strongest signal/noise in r' filter
         # r.sort('phot_rp_mean_flux_over_error')
@@ -430,9 +489,10 @@ class FitsImage:
         # need bkg subtracted to extract stars, want to build ePSF using just star brightness
         data -= median_val # L1med
         nddata = NDData(data=data)
-        psfstars_extracted = extract_stars(nddata,catalogs=gaiacat, size=25)
-        # using the bbox of each star from results to determine intersections, dont want confusion of multi-stars for ePSF
-        # this was done with all stars not just those extracted, this is an optional sanity check but don't need it
+        psfstars_extracted = extract_stars(nddata, catalogs=gaiacat,
+                                           size=_PSFSTARCUTOUTSIZE_)
+        # using the bbox of each star from results to determine intersections,
+        # we don't want confusion of blended stars in our ePSF
         intersections = []
         for i,obj1 in enumerate(psfstars_extracted.bbox):
             for j in range(i+1,len(psfstars_extracted.bbox)):
@@ -447,17 +507,21 @@ class FitsImage:
         for i in tmp:
             if i.bbox in intersections:
                 tmp.remove(i)
-        #print('{} stars, after removing intersections'.format(len(tmp)))
+        if verbose:
+            print('{} stars, after removing intersections'.format(len(tmp)))
 
-
-        # note ref.fits doesn't have saturate and maxlin available the image should be just one of the trims
+        # note ref.fits doesn't have saturate and maxlin available
+        # the image should be just one of the trims
         for i in tmp:
             if np.max(i.data) > saturate:
                 tmp.remove(i)
             elif np.max(i.data) > maxlin:
                 tmp.remove(i)
 
-        print('removed stars above saturation or non-linearity level ~ {}, {} ADU; now have {}'.format(saturate,maxlin,len(tmp)))
+        if verbose:
+            print('removed stars above saturation or non-linearity level'
+                  '~ {}, {} ADU; now have {}'.format(
+                saturate,maxlin,len(tmp)))
         psf_stars_selected = photutils.psf.EPSFStars(tmp)
 
         """
@@ -475,14 +539,18 @@ class FitsImage:
 
         return
 
-    def build_epsf_model(self, fitsimage, starcoordinates,
-                         outfilename='psf.fits', oversampling=2):
+    def build_epsf_model(self, fitsimage,
+                         outfilename='psf.fits', oversampling=2,
+                         verbose=False):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
         non-linearity/saturation
         """
+        # TODO: check for existence of gaia source table and fetch/read it if needed
+        #starcoordinates = fitsimage.gaia_source_table
+
         #TODO: whittle down to just the good stars (below saturation)
-        self.extract_psf_stars()
+        self.extract_psf_stars(verbose=verbose)
         assert(self.psfstars is not None)
 
         # TODO: accommodate other header keywords to get the stats we need
