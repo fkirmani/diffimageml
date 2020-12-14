@@ -2,12 +2,13 @@ import numpy as np
 
 import astropy
 from astropy import units as u
+from astroquery.gaia import Gaia
 from astropy.coordinates import SkyCoord
 from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
 from astropy.table import Table,Column,Row,vstack,setdiff,join
 from astroquery.gaia import Gaia
 from astropy.io import ascii,fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, utils as wcsutils
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.convolution import Gaussian2DKernel
 
