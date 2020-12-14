@@ -24,7 +24,7 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
     _SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_GOFAST_ = False # Use this to skip slow tests
+_GOFAST_ = True # Use this to skip slow tests
 
 def test_pristine_data():
     """
@@ -50,7 +50,7 @@ def test_fetch_gaia_sources():
     # NOte: we adjust the save_suffix so we can test saving of the output to
     # a file, but it will not conflict  with existence of a pre-baked gaia
     # catalog test file with the default suffix GaiaCat
-    searchim1.fetch_gaia_sources(save_suffix=None)#'TestGaiaCat')
+    searchim1.fetch_gaia_sources(save_suffix='TestGaiaCat')
 
     # TODO : more informative test output?
     assert type(searchim1.gaia_source_table) == Table
@@ -72,10 +72,20 @@ def test_build_epsf_model():
     """Check construction of an ePSF model
     from Gaia stars.
     """
-    fakeplanterobject = diffimageml.FakePlanter(
-        _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
-    fakeplanterobject.build_epsf_model()
-    assert(fakeplanterobject.has_epsf_model)
+    epsfmodelobject = diffimageml.FakePlanterEPSFModel()
+
+    # TODO: read in a fits image (should inherit from upstream)
+    fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
+
+    # TODO : get Gaia stars (should inherit from upstream)
+    fitsimageobject.fetch_gaia_sources(save_suffix=None)#'TestGaiaCat')
+
+    # TODO : make the output file, then delete it?
+    epsfmodelobject.build_epsf_model(
+        fitsimageobject, fitsimageobject.gaia_source_table,
+        outfilename='test_epsf.fits'
+    )
+    assert(epsfmodelobject.epsf is not None)
     return
 
 
@@ -168,7 +178,8 @@ def test_diffimageml():
         failed+=1
 
     try:
-        if not _GOFAST_:
+        #if not _GOFAST_:
+        if True:
             print('Testing Gaia astroquery...', end='')
             total += 1
             test_fetch_gaia_sources()
@@ -190,6 +201,7 @@ def test_diffimageml():
 
 
     try:
+        #if True:
         if not _GOFAST_:
             print('Testing ePSF model construction...', end='')
             total += 1
@@ -211,10 +223,11 @@ def test_diffimageml():
         failed+=1
 
     try:
-        print('Testing FakePlanter planting...', end='')
-        total += 1
-        test_fakeplanter(accuracy=0.05)
-        print("Passed!")
+        if not _GOFAST_:
+            print('Testing FakePlanter planting...', end='')
+            total += 1
+            test_fakeplanter(accuracy=0.05)
+            print("Passed!")
     except Exception as e:
         print('Failed')
         print(traceback.format_exc())

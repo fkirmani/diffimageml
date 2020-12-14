@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 from astroquery.gaia import Gaia
 
@@ -12,8 +13,10 @@ from astropy.wcs import WCS, utils as wcsutils
 
 import photutils
 from photutils.datasets import make_gaussian_sources_image
-from photutils import Background2D, MedianBackground, detect_threshold,detect_sources,source_properties
+from photutils import Background2D, MedianBackground
+from photutils import detect_sources,source_properties
 from photutils.psf import EPSFModel
+from photutils import EPSFBuilder
 
 import itertools
 import copy
@@ -29,7 +32,8 @@ class FakePlanterEPSFModel():
         # TODO: zeropoint is measured in the FitsImage class
         #  maybe we should require it exists, then inherit the value here?
         self.zeropoint = 0
-
+        self.epsf = None
+        self.fitted_stars = None
         return
 
     def scaled_to_mag(self, mag):
@@ -46,9 +50,9 @@ class FakePlanterEPSFModel():
         non-linearity/saturation
         """
         #TODO: whittle down to just the good stars (below saturation)
-        hdr = fitsimage.header
 
         # TODO: accommodate other header keywords to get the stats we need
+        hdr = fitsimage.sci.header
         L1mean = hdr['L1MEAN'] # for LCO: counts
         L1med  = hdr['L1MEDIAN'] # for LCO: counts
         L1sigma = hdr['L1SIGMA'] # for LCO: counts
@@ -349,10 +353,11 @@ class FitsImage:
         self.gaia_source_table = Gaia.query_object_async(
             coordinate=coord, width=width, height=height)
 
-        # TODO : saving to file not yet debugged
         if save_suffix:
-            savefilename = os.path.split_ext(self.fitsfilename)[0] +\
-                           '_' + save_suffix + '.txt'
+            savefilename = (
+                    os.path.splitext(
+                        os.path.splitext(self.filename)[0])[0]
+                    + '_' + save_suffix + '.txt')
             if os.path.exists(savefilename):
                 os.remove(savefilename)
             # TODO : make more space-efficient as a binary table?
