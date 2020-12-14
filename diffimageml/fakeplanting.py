@@ -417,6 +417,11 @@ class FitsImage:
         """
         Extract postage-stamp image cutouts of stars from the image, for use
         in building an ePSF model
+
+        Parameters
+        ----------
+
+        verbose: bool : verbose output
         """
         gaiacat = self.gaia_source_table
         image = self.sci
@@ -541,16 +546,28 @@ class FitsImage:
 
         return
 
-    def build_epsf_model(self, outfilename='epsfmodel.fits', oversampling=2,
-                         verbose=False):
+    def build_epsf_model(self, oversampling=2,
+                         verbose=False, save_suffix=None):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
         non-linearity/saturation
+
+        Parameters
+        ----------
+
+        oversampling: int : the oversampling scale for the PSF model. See the
+          photutils ePSF model documentation for details.
+
+        verbose: bool : verbose output
+
+        save_suffix: str
+            The suffix for the epsf model output filename.
+            If set to None, then no output file is generated
+
         """
         # TODO: check for existence of gaia source table and fetch/read it if needed
         #starcoordinates = fitsimage.gaia_source_table
 
-        #TODO: whittle down to just the good stars (below saturation)
         self.extract_psf_stars(verbose=verbose)
         assert(self.psfstars is not None)
 
@@ -566,9 +583,13 @@ class FitsImage:
 
         # oversampling chops pixels of each star up further to get better fit
         # this is okay since stacking multiple ...
-        # however more oversampled the ePSF is, the more stars you need to get smooth result
-        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement without any oversampling
-        # ePSF basic x,y,sigma 3 param model should be easily obtained if consider that 3*pixscale < fwhm
+        # however more oversampled the ePSF is, the more stars you need to get
+        # smooth result
+        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while
+        # pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement
+        # without any oversampling
+        # ePSF basic x,y,sigma 3 param model should be easily obtained if
+        # consider that 3*pixscale < fwhm
         epsf_builder = EPSFBuilder(oversampling=oversampling, maxiters=10,
                                    progress_bar=True)
         epsf, fitted_stars = epsf_builder(self.psfstars)
@@ -578,8 +599,32 @@ class FitsImage:
 
         if self.zeropoint is None:
             self.measure_zeropoint()
+
+        # TODO : Can we save this ePSF model as a fits extension instead?
+        if save_suffix:
+            # Write out the ePSF model
+            # TODO: make a function for generating output file names
+            rootfilename = os.path.splitext(
+                os.path.splitext(self.filename)[0])[0]
+            epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
+            pickle.dump( self.epsf, open( epsf_filename, "wb" ) )
+
         return
 
+    def load_epsfmodel_from_pickle(self, save_suffix):
+        """Read in an ePSF model from a pickle file
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            The suffix for the epsf model filename to be read.
+        """
+        rootfilename = os.path.splitext(
+            os.path.splitext(self.filename)[0])[0]
+        epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
+        self.epsf = pickle.load(open( epsf_filename, "rb" ) )
+        return
 
 
 class FakePlanter:
