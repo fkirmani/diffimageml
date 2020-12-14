@@ -15,7 +15,7 @@ import photutils
 from photutils.datasets import make_gaussian_sources_image
 from photutils import Background2D, MedianBackground
 from photutils import detect_sources,source_properties
-from photutils.psf import EPSFModel
+from photutils.psf import EPSFModel, extract_stars
 from photutils import EPSFBuilder
 
 import itertools
@@ -43,40 +43,8 @@ class FakePlanterEPSFModel():
         # TODO : add a check that zeropoint has been set by user
         return self.epsf.data * 10**(-0.4*(mag-self.zeropoint))
 
-    def build_epsf_model(self, fitsimage, starcoordinates,
-                         outfilename='psf.fits', oversampling=2):
-        """Build an effective PSF model from a set of stars in the image
-        Uses a list of star locations (from Gaia)  which are below
-        non-linearity/saturation
-        """
-        #TODO: whittle down to just the good stars (below saturation)
 
-        # TODO: accommodate other header keywords to get the stats we need
-        hdr = fitsimage.sci.header
-        L1mean = hdr['L1MEAN'] # for LCO: counts
-        L1med  = hdr['L1MEDIAN'] # for LCO: counts
-        L1sigma = hdr['L1SIGMA'] # for LCO: counts
-        L1fwhm = hdr['L1FWHM'] # for LCO: fwhm in arcsec
-        pixscale = hdr['PIXSCALE'] # arcsec/pixel
-        saturate = hdr['SATURATE'] # counts (saturation level)
-        maxlin = hdr['MAXLIN'] # counts (max level for linear pixel response)
 
-        # oversampling chops pixels of each star up further to get better fit
-        # this is okay since stacking multiple ...
-        # however more oversampled the ePSF is, the more stars you need to get smooth result
-        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement without any oversampling
-        # ePSF basic x,y,sigma 3 param model should be easily obtained if consider that 3*pixscale < fwhm
-        epsf_builder = EPSFBuilder(oversampling=oversampling, maxiters=10,
-                                   progress_bar=True)
-        epsf, fitted_stars = epsf_builder(starcoordinates)
-
-        self.epsf = epsf
-        self.fitted_stars = fitted_stars
-
-        if fitsimage.zeropoint is None:
-            fitsimage.measure_zeropoint()
-            self.zeropoint = fitsimage.zeropoint
-        return
 
     def showepsfmodel(self):
         """ TODO: visualize the ePSF model"""
@@ -111,8 +79,11 @@ class FitsImage:
         """
 
         self.filename = fitsfilename
-        self.hdulist, self.hdu = self.read_fits_file(fitsfilename)
+        self.read_fits_file(fitsfilename)
+        self.psfstars = None
         self.psfmodel = None
+        self.epsf = None
+
         self.sourcecatalog = None
         self.zeropoint = None
         return
@@ -129,7 +100,7 @@ class FitsImage:
         Returns
         -------
         hdulist : :class:`~astropy.io.fits.HDUList`
-        hdu : :class:`~astropy.io.fits.PrimaryHDU` (or similar)
+        sci :  the science array :class:`~astropy.io.fits.PrimaryHDU` (or similar)
 
         """
         self.hdulist = fits.open(fitsfilename)
@@ -149,18 +120,9 @@ class FitsImage:
         # Maybe there's an astropy function to get this in a more general way?
         self.frame = self.sci.header['RADESYS'].lower()
 
-        # TODO
-        #
-        #Let's make sure that this is 
-        #true in general, or change if not.
-        #
-        if fitsfilename.endswith('fz'):
-            return self.hdulist, self.hdulist[1]
-        else:
-            return self.hdulist, self.hdulist[0]
-        # TODO : remove the return statemens after confirming that no calling
-        # functions need them.
-        
+        return self.hdulist, self.sci
+
+
     def pixtosky(self,pixel):
         """
         Given a pixel location returns the skycoord
@@ -354,10 +316,8 @@ class FitsImage:
             coordinate=coord, width=width, height=height)
 
         if save_suffix:
-            savefilename = (
-                    os.path.splitext(
-                        os.path.splitext(self.filename)[0])[0]
-                    + '_' + save_suffix + '.txt')
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            savefilename = root + '_' + save_suffix + '.txt'
             if os.path.exists(savefilename):
                 os.remove(savefilename)
             # TODO : make more space-efficient as a binary table?
@@ -373,6 +333,185 @@ class FitsImage:
         photometry of those stars. """
         # TODO : measure the zeropoint
         return
+
+
+    def extract_psf_stars(self, verbose=False):
+        """
+        Extract postage-stamp image cutouts of stars from the image, for use
+        in building an ePSF model
+        """
+        gaiacat = self.gaia_source_table
+        image = self.sci
+
+        # need to give the results a column name x and y (pixel locations
+        # on image) for extract stars fcn which am going to apply
+        wcs,frame = WCS(image.header),image.header['RADESYS'].lower()
+        positions,pixels=[],[]
+        for i in range(len(gaiacat)):
+            position = SkyCoord(ra=gaiacat[i]['ra'],
+                                dec=gaiacat[i]['dec'],
+                                unit=u.deg,frame=frame)
+            positions.append(position)
+            pixel=skycoord_to_pixel(position,wcs)
+            pixels.append(pixel)
+        x,y=[i[0] for i in pixels],[i[1] for i in pixels]
+        x,y=Column(x),Column(y)
+        gaiacat.add_column(x,name='x')
+        gaiacat.add_column(y,name='y')
+        if verbose:
+            print('There are {} stars available within fov '
+                  'from gaia results queried'.format(len(gaiacat)))
+
+        # Define bounding boxes for the extractions so we can remove
+        # any stars with overlaps. We want stars without overlaps
+        # so the PSF construction doesn't require any deblending.
+        # TODO : allow user to set the overlap size, or set based on FWHM
+        bboxes = []
+        for i in gaiacat:
+            x = i['x']
+            y = i['y']
+            size = 25
+            ixmin,ixmax = int(x - size/2), int(x + size/2)
+            iymin, iymax = int(y - size/2), int(y + size/2)
+
+            bbox = BoundingBox(ixmin=ixmin, ixmax=ixmax, iymin=iymin, iymax=iymax)
+            bboxes.append(bbox)
+        bboxes = Column(bboxes)
+        gaiacat.add_column(bboxes,name='bbox')
+
+        # using the bbox of each star from results to determine intersections,
+        # dont want confusion of multi-stars for ePSF
+        intersections = []
+        for i,obj1 in enumerate(bboxes):
+            for j in range(i+1,len(bboxes)):
+                obj2 = bboxes[j]
+                if obj1.intersection(obj2):
+                    #print(obj1,obj2)
+                    # these are the ones to remove
+                    intersections.append(obj1)
+                    intersections.append(obj2)
+        # use the intersections found to remove stars
+        j=0
+        rows=[]
+        for i in gaiacat:
+            if i['bbox'] in intersections:
+                #tmp.remove(i)
+                row=j
+                rows.append(row)
+            j+=1
+        gaiacat.remove_rows(rows)
+        if verbose:
+            print('{} stars, after removing intersections'.format(len(gaiacat)))
+
+        # I am going to extract stars with strong signal in rp filter (the one lco is looking in)
+        gaiacat = gaiacat[gaiacat['phot_rp_mean_flux_over_error']>100]
+        if verbose:
+            print('restricting extractions to stars w rp flux/error > 100 we have {} to consider'.format(len(gaiacat)))
+
+        # TODO? sort by the strongest signal/noise in r' filter
+        # r.sort('phot_rp_mean_flux_over_error')
+        """
+        # don't think it will be necessary to limit to some N stars, might as well take all that will give good data for building psf
+        if Nbrightest == None:
+            Nbrightest = len(r)
+        brightest_results = r[:Nbrightest]
+        """
+
+        data = image.data
+        hdr = image.header
+        # the header has L1 bkg values; should be the same as sigma clipped stats
+        L1mean,L1med,L1sigma,L1fwhm = hdr['L1MEAN'],hdr['L1MEDIAN'],hdr['L1SIGMA'],hdr['L1FWHM'] # counts, fwhm in arcsec
+        mean_val, median_val, std_val = sigma_clipped_stats(data, sigma=2.)
+        WMSSKYBR = hdr['WMSSKYBR'] # mag/arcsec^2 of sky bkg measured
+        # AGGMAG the guide star magnitude header value would be simpler but it is given as unknown, ra/dec are provided for it though
+        # grab some other useful header values now
+        pixscale,saturate,maxlin = hdr['PIXSCALE'],hdr['SATURATE'],hdr['MAXLIN'] # arcsec/pixel, counts for saturation and non-linearity levels
+
+        # need bkg subtracted to extract stars, want to build ePSF using just star brightness
+        data -= median_val # L1med
+        nddata = NDData(data=data)
+        psfstars_extracted = extract_stars(nddata,catalogs=gaiacat, size=25)
+        # using the bbox of each star from results to determine intersections, dont want confusion of multi-stars for ePSF
+        # this was done with all stars not just those extracted, this is an optional sanity check but don't need it
+        intersections = []
+        for i,obj1 in enumerate(psfstars_extracted.bbox):
+            for j in range(i+1,len(psfstars_extracted.bbox)):
+                obj2 = psfstars_extracted.bbox[j]
+                if obj1.intersection(obj2):
+                    #print(obj1,obj2)
+                    # these are the ones to remove
+                    intersections.append(obj1)
+                    intersections.append(obj2)
+        # use the intersections found to remove stars
+        tmp = [i for i in psfstars_extracted] # get a list of stars rather than single photutils obj with all of them
+        for i in tmp:
+            if i.bbox in intersections:
+                tmp.remove(i)
+        #print('{} stars, after removing intersections'.format(len(tmp)))
+
+
+        # note ref.fits doesn't have saturate and maxlin available the image should be just one of the trims
+        for i in tmp:
+            if np.max(i.data) > saturate:
+                tmp.remove(i)
+            elif np.max(i.data) > maxlin:
+                tmp.remove(i)
+
+        print('removed stars above saturation or non-linearity level ~ {}, {} ADU; now have {}'.format(saturate,maxlin,len(tmp)))
+        psf_stars_selected = photutils.psf.EPSFStars(tmp)
+
+        """
+        # you should look at the images to make sure these are good stars
+        nrows = 4
+        ncols = 4
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 20),
+                                squeeze=True)
+        ax = ax.ravel()
+        for i in range(len(brightest_results)):
+            norm = simple_norm(stars[i], 'log', percent=99.)
+            ax[i].imshow(stars[i], norm=norm, origin='lower', cmap='viridis')
+        """
+        self.psfstars = psf_stars_selected
+
+        return
+
+    def build_epsf_model(self, fitsimage, starcoordinates,
+                         outfilename='psf.fits', oversampling=2):
+        """Build an effective PSF model from a set of stars in the image
+        Uses a list of star locations (from Gaia)  which are below
+        non-linearity/saturation
+        """
+        #TODO: whittle down to just the good stars (below saturation)
+        self.extract_psf_stars()
+        assert(self.psfstars is not None)
+
+        # TODO: accommodate other header keywords to get the stats we need
+        hdr = fitsimage.sci.header
+        L1mean = hdr['L1MEAN'] # for LCO: counts
+        L1med  = hdr['L1MEDIAN'] # for LCO: counts
+        L1sigma = hdr['L1SIGMA'] # for LCO: counts
+        L1fwhm = hdr['L1FWHM'] # for LCO: fwhm in arcsec
+        pixscale = hdr['PIXSCALE'] # arcsec/pixel
+        saturate = hdr['SATURATE'] # counts (saturation level)
+        maxlin = hdr['MAXLIN'] # counts (max level for linear pixel response)
+
+        # oversampling chops pixels of each star up further to get better fit
+        # this is okay since stacking multiple ...
+        # however more oversampled the ePSF is, the more stars you need to get smooth result
+        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement without any oversampling
+        # ePSF basic x,y,sigma 3 param model should be easily obtained if consider that 3*pixscale < fwhm
+        epsf_builder = EPSFBuilder(oversampling=oversampling, maxiters=10,
+                                   progress_bar=True)
+        epsf, fitted_stars = epsf_builder(self.psfstars)
+
+        self.epsf = epsf
+        self.fitted_stars = fitted_stars
+
+        if fitsimage.zeropoint is None:
+            fitsimage.measure_zeropoint()
+            self.zeropoint = fitsimage.zeropoint
+        return
+
 
 
 class FakePlanter:
