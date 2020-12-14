@@ -143,7 +143,7 @@ class FitsImage:
         """
         Given a pixel location returns the skycoord
         """
-        hdu = self.hdu
+        hdu = self.sci
         hdr = hdu.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
         xp,yp = pixel
@@ -154,7 +154,7 @@ class FitsImage:
         """
         Given a skycoord (or list of skycoords) returns the pixel locations
         """
-        hdu = self.hdu
+        hdu = self.sci
         hdr = hdu.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
         pixel = wcsutils.skycoord_to_pixel(sky,wcs)
@@ -201,7 +201,7 @@ class FitsImage:
         # maybe separate?: run PSF fitting photometry on each fake source
         # to be able to translate from ra/dec <--> pixels on image
 
-        hdr = self.hdu.header
+        hdr = self.sci.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
         #L1mean,L1med,L1sigma,L1fwhm = hdr['L1MEAN'],hdr['L1MEDIAN'],hdr['L1SIGMA'],hdr['L1FWHM'] # counts, fwhm in arcsec 
         #pixscale,saturate,maxlin = hdr['PIXSCALE'],hdr['SATURATE'],hdr['MAXLIN'] # arcsec/pixel, counts for saturation and non-linearity levels
@@ -210,25 +210,25 @@ class FitsImage:
         # threshold = detect_threshold(hdu.data, nsigma=nsigma)
         # or you can provide a bkg of the same shape as data and this will be used
         boxsize=100
-        bkg = Background2D(self.hdu.data,boxsize) # sigma-clip stats for background est over image on boxsize, regions interpolated to give final map 
-        threshold = detect_threshold(self.hdu.data, nsigma=nsigma,background=bkg.background)
+        bkg = Background2D(self.sci.data,boxsize) # sigma-clip stats for background est over image on boxsize, regions interpolated to give final map 
+        threshold = detect_threshold(self.sci.data, nsigma=nsigma,background=bkg.background)
         ksigma = kfwhm * gaussian_fwhm_to_sigma  # FWHM pixels for kernel smoothing
         # optional ~ kernel smooths the image, using gaussian weighting
         kernel = Gaussian2DKernel(ksigma)
         kernel.normalize()
         # make a segmentation map, id sources defined as n connected pixels above threshold (n*sigma + bkg)
-        segm = detect_sources(self.hdu.data,
+        segm = detect_sources(self.sci.data,
                               threshold, npixels=npixels, filter_kernel=kernel)
         # deblend useful for very crowded image with many overlapping objects...
         # uses multi-level threshold and watershed segmentation to sep local peaks as ind obj
         # use the same number of pixels and filter as was used on original segmentation
         # contrast is fraction of source flux local pk has to be consider its own obj
         if deblend:
-            segm = deblend_sources(self.hdu.data, 
+            segm = deblend_sources(self.sci.data, 
                                            segm, npixels=5,filter_kernel=kernel, 
                                            nlevels=32,contrast=contrast)
         # need bkg subtracted to do photometry using source properties
-        data_bkgsub = self.hdu.data - bkg.background
+        data_bkgsub = self.sci.data - bkg.background
         cat = source_properties(data_bkgsub, segm,background=bkg.background,
                                 error=None,filter_kernel=kernel)
 
