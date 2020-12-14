@@ -18,10 +18,17 @@ from photutils.psf import EPSFModel
 import itertools
 import copy
 
-class FakePlanterEPSFModel(EPSFModel):
-    """ A class for holding an effective PSF model."""
+class FakePlanterEPSFModel():
+    """ A class for holding an effective PSF model.
+
+    """
     def __init__(self):
-        self.fluxarray = np.array([]) # array of flux density values (e-/s/cm2)
+        """
+
+        """
+        # TODO: zeropoint is measured in the FitsImage class
+        #  maybe we should require it exists, then inherit the value here?
+        self.zeropoint = 0
 
         return
 
@@ -29,7 +36,57 @@ class FakePlanterEPSFModel(EPSFModel):
         """Return a data array scaled to the given magnitude.
         Requires that a zeropoint has been set.
         """
-        return self.fluxarray * 10**(-0.4*(mag-self.zeropoint))
+        # TODO : add a check that zeropoint has been set by user
+        return self.epsf.data * 10**(-0.4*(mag-self.zeropoint))
+
+    def build_epsf_model(self, fitsimage, starcoordinates,
+                         outfilename='psf.fits', oversampling=2):
+        """Build an effective PSF model from a set of stars in the image
+        Uses a list of star locations (from Gaia)  which are below
+        non-linearity/saturation
+        """
+        #TODO: whittle down to just the good stars (below saturation)
+        hdr = fitsimage.header
+
+        # TODO: accommodate other header keywords to get the stats we need
+        L1mean = hdr['L1MEAN'] # for LCO: counts
+        L1med  = hdr['L1MEDIAN'] # for LCO: counts
+        L1sigma = hdr['L1SIGMA'] # for LCO: counts
+        L1fwhm = hdr['L1FWHM'] # for LCO: fwhm in arcsec
+        pixscale = hdr['PIXSCALE'] # arcsec/pixel
+        saturate = hdr['SATURATE'] # counts (saturation level)
+        maxlin = hdr['MAXLIN'] # counts (max level for linear pixel response)
+
+        # oversampling chops pixels of each star up further to get better fit
+        # this is okay since stacking multiple ...
+        # however more oversampled the ePSF is, the more stars you need to get smooth result
+        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement without any oversampling
+        # ePSF basic x,y,sigma 3 param model should be easily obtained if consider that 3*pixscale < fwhm
+        epsf_builder = EPSFBuilder(oversampling=oversampling, maxiters=10,
+                                   progress_bar=True)
+        epsf, fitted_stars = epsf_builder(starcoordinates)
+
+        self.epsf = epsf
+        self.fitted_stars = fitted_stars
+
+        if fitsimage.zeropoint is None:
+            fitsimage.measure_zeropoint()
+            self.zeropoint = fitsimage.zeropoint
+        return
+
+    def showepsfmodel(self):
+        """ TODO: visualize the ePSF model"""
+        norm = simple_norm(self.epsf.data, 'log', percent=99.)
+        plt.imshow(self.epsf.data, norm=norm, origin='lower', cmap='viridis')
+        plt.colorbar()
+        return
+
+    def writetofits(self):
+        """TODO: write to a fits file"""
+        #fits.writeto(name,epsf.data,hdr,overwrite=True)
+        #         fits.writeto(plantname,image.data,hdr,overwrite=True)
+        return
+
 
 class FitsImage:
     """A class to hold a single FITS image and associated products
@@ -53,6 +110,7 @@ class FitsImage:
         self.hdulist, self.hdu = self.read_fits_file(fitsfilename)
         self.psfmodel = None
         self.sourcecatalog = None
+        self.zeropoint = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -304,7 +362,13 @@ class FitsImage:
 
         return
 
-            
+    def measure_zeropoint(self):
+        """Measure the zeropoint of the image, using a set of
+        known star locations and magnitudes, plus photutils aperture
+        photometry of those stars. """
+        # TODO : measure the zeropoint
+        return
+
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
