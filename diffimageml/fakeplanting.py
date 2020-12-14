@@ -1,29 +1,64 @@
 import numpy as np
+import os
 
-from astropy import units as u
 from astroquery.gaia import Gaia
+
+from astropy import units
 from astropy.coordinates import SkyCoord
-from astropy.io import ascii,fits
-from astropy.wcs import WCS, utils as wcsutils
-from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.convolution import Gaussian2DKernel
-from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
+from astropy.io import ascii,fits
+from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
+from astropy.table import Table,Column,Row,vstack,setdiff,join
+from astropy.wcs import WCS, utils as wcsutils
 
-from photutils import Background2D, MedianBackground, detect_threshold,detect_sources,source_properties
-from photutils.psf import EPSFModel
+import photutils
+from photutils.datasets import make_gaussian_sources_image
+from photutils import Background2D, MedianBackground
+from photutils import detect_sources,source_properties
+from photutils.psf import EPSFModel, extract_stars
+from photutils import EPSFBuilder
 
-class FakePlanterEPSFModel(EPSFModel):
-    """ A class for holding an effective PSF model."""
+import itertools
+import copy
+
+class FakePlanterEPSFModel():
+    """ A class for holding an effective PSF model.
+
+    """
     def __init__(self):
-        self.fluxarray = np.array([]) # array of flux density values (e-/s/cm2)
+        """
 
+        """
+        # TODO: zeropoint is measured in the FitsImage class
+        #  maybe we should require it exists, then inherit the value here?
+        self.zeropoint = 0
+        self.epsf = None
+        self.fitted_stars = None
         return
 
     def scaled_to_mag(self, mag):
         """Return a data array scaled to the given magnitude.
         Requires that a zeropoint has been set.
         """
-        return self.fluxarray * 10**(-0.4*(mag-self.zeropoint))
+        # TODO : add a check that zeropoint has been set by user
+        return self.epsf.data * 10**(-0.4*(mag-self.zeropoint))
+
+
+
+
+    def showepsfmodel(self):
+        """ TODO: visualize the ePSF model"""
+        norm = simple_norm(self.epsf.data, 'log', percent=99.)
+        plt.imshow(self.epsf.data, norm=norm, origin='lower', cmap='viridis')
+        plt.colorbar()
+        return
+
+    def writetofits(self):
+        """TODO: write to a fits file"""
+        #fits.writeto(name,epsf.data,hdr,overwrite=True)
+        #         fits.writeto(plantname,image.data,hdr,overwrite=True)
+        return
+
 
 class FitsImage:
     """A class to hold a single FITS image and associated products
@@ -44,9 +79,13 @@ class FitsImage:
         """
 
         self.filename = fitsfilename
-        self.hdulist, self.hdu = self.read_fits_file(fitsfilename)
+        self.read_fits_file(fitsfilename)
+        self.psfstars = None
         self.psfmodel = None
+        self.epsf = None
+
         self.sourcecatalog = None
+        self.zeropoint = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -61,7 +100,7 @@ class FitsImage:
         Returns
         -------
         hdulist : :class:`~astropy.io.fits.HDUList`
-        hdu : :class:`~astropy.io.fits.PrimaryHDU` (or similar)
+        sci :  the science array :class:`~astropy.io.fits.PrimaryHDU` (or similar)
 
         """
         self.hdulist = fits.open(fitsfilename)
@@ -81,18 +120,9 @@ class FitsImage:
         # Maybe there's an astropy function to get this in a more general way?
         self.frame = self.sci.header['RADESYS'].lower()
 
-        # TODO
-        #
-        #Let's make sure that this is 
-        #true in general, or change if not.
-        #
-        if fitsfilename.endswith('fz'):
-            return self.hdulist, self.hdulist[1]
-        else:
-            return self.hdulist, self.hdulist[0]
-        # TODO : remove the return statemens after confirming that no calling
-        # functions need them.
-        
+        return self.hdulist, self.sci
+
+
     def pixtosky(self,pixel):
         """
         Given a pixel location returns the skycoord
@@ -101,7 +131,7 @@ class FitsImage:
         hdr = hdu.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
         xp,yp = pixel
-        sky = pixel_to_skycoord(xp,yp,wcs)
+        sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
         return sky
 
     def skytopix(self,sky):
@@ -111,7 +141,7 @@ class FitsImage:
         hdu = self.hdu
         hdr = hdu.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
-        pixel = skycoord_to_pixel(sky,wcs)
+        pixel = wcsutils.skycoord_to_pixel(sky,wcs)
         return pixel
 
 
@@ -213,9 +243,9 @@ class FitsImage:
         
         if not pixel_coords:
             ##Set units to degrees unless otherwise specified
-            if type(pixel_coords) != u.quantity.Quantity:
-                target_x *= u.deg
-                target_y *= u.deg
+            if type(pixel_coords) != units.quantity.Quantity:
+                target_x *= units.deg
+                target_y *= units.deg
             C = SkyCoord(target_x,target_y)
             ##Convert to pixel coordinates
             pix = self.skytopix(C)
@@ -264,7 +294,7 @@ class FitsImage:
         # coord of central reference pixel
         ra_ref = self.sci.header['CRVAL1']
         dec_ref = self.sci.header['CRVAL2']
-        coord = SkyCoord(ra_ref, dec_ref, unit=(u.hourangle,u.deg))
+        coord = SkyCoord(ra_ref, dec_ref, unit=(units.hourangle, units.deg))
 
         ## Compute the pixel scale in units of arcseconds, from the CD matrix
         #cd11 = self.sci.header['CD1_1'] # deg/pixel
@@ -278,17 +308,16 @@ class FitsImage:
         # compute the width and height of the image from the NAXIS keywords
         naxis1 = self.sci.header['NAXIS1']
         naxis2 = self.sci.header['NAXIS2']
-        width = naxis1 * pixelscale * u.deg
-        height = naxis2 * pixelscale * u.deg
+        width = naxis1 * pixelscale * units.deg
+        height = naxis2 * pixelscale * units.deg
 
         # Do the search. Returns an astropy Table
         self.gaia_source_table = Gaia.query_object_async(
             coordinate=coord, width=width, height=height)
 
-        # TODO : saving to file not yet debugged
         if save_suffix:
-            savefilename = os.path.split_ext(self.fitsfilename)[0] +\
-                           '_' + save_suffix + '.txt'
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            savefilename = root + '_' + save_suffix + '.txt'
             if os.path.exists(savefilename):
                 os.remove(savefilename)
             # TODO : make more space-efficient as a binary table?
@@ -298,7 +327,192 @@ class FitsImage:
 
         return
 
-            
+    def measure_zeropoint(self):
+        """Measure the zeropoint of the image, using a set of
+        known star locations and magnitudes, plus photutils aperture
+        photometry of those stars. """
+        # TODO : measure the zeropoint
+        return
+
+
+    def extract_psf_stars(self, verbose=False):
+        """
+        Extract postage-stamp image cutouts of stars from the image, for use
+        in building an ePSF model
+        """
+        gaiacat = self.gaia_source_table
+        image = self.sci
+
+        # need to give the results a column name x and y (pixel locations
+        # on image) for extract stars fcn which am going to apply
+        wcs,frame = WCS(image.header),image.header['RADESYS'].lower()
+        positions,pixels=[],[]
+        for i in range(len(gaiacat)):
+            position = SkyCoord(ra=gaiacat[i]['ra'],
+                                dec=gaiacat[i]['dec'],
+                                unit=u.deg,frame=frame)
+            positions.append(position)
+            pixel=skycoord_to_pixel(position,wcs)
+            pixels.append(pixel)
+        x,y=[i[0] for i in pixels],[i[1] for i in pixels]
+        x,y=Column(x),Column(y)
+        gaiacat.add_column(x,name='x')
+        gaiacat.add_column(y,name='y')
+        if verbose:
+            print('There are {} stars available within fov '
+                  'from gaia results queried'.format(len(gaiacat)))
+
+        # Define bounding boxes for the extractions so we can remove
+        # any stars with overlaps. We want stars without overlaps
+        # so the PSF construction doesn't require any deblending.
+        # TODO : allow user to set the overlap size, or set based on FWHM
+        bboxes = []
+        for i in gaiacat:
+            x = i['x']
+            y = i['y']
+            size = 25
+            ixmin,ixmax = int(x - size/2), int(x + size/2)
+            iymin, iymax = int(y - size/2), int(y + size/2)
+
+            bbox = BoundingBox(ixmin=ixmin, ixmax=ixmax, iymin=iymin, iymax=iymax)
+            bboxes.append(bbox)
+        bboxes = Column(bboxes)
+        gaiacat.add_column(bboxes,name='bbox')
+
+        # using the bbox of each star from results to determine intersections,
+        # dont want confusion of multi-stars for ePSF
+        intersections = []
+        for i,obj1 in enumerate(bboxes):
+            for j in range(i+1,len(bboxes)):
+                obj2 = bboxes[j]
+                if obj1.intersection(obj2):
+                    #print(obj1,obj2)
+                    # these are the ones to remove
+                    intersections.append(obj1)
+                    intersections.append(obj2)
+        # use the intersections found to remove stars
+        j=0
+        rows=[]
+        for i in gaiacat:
+            if i['bbox'] in intersections:
+                #tmp.remove(i)
+                row=j
+                rows.append(row)
+            j+=1
+        gaiacat.remove_rows(rows)
+        if verbose:
+            print('{} stars, after removing intersections'.format(len(gaiacat)))
+
+        # I am going to extract stars with strong signal in rp filter (the one lco is looking in)
+        gaiacat = gaiacat[gaiacat['phot_rp_mean_flux_over_error']>100]
+        if verbose:
+            print('restricting extractions to stars w rp flux/error > 100 we have {} to consider'.format(len(gaiacat)))
+
+        # TODO? sort by the strongest signal/noise in r' filter
+        # r.sort('phot_rp_mean_flux_over_error')
+        """
+        # don't think it will be necessary to limit to some N stars, might as well take all that will give good data for building psf
+        if Nbrightest == None:
+            Nbrightest = len(r)
+        brightest_results = r[:Nbrightest]
+        """
+
+        data = image.data
+        hdr = image.header
+        # the header has L1 bkg values; should be the same as sigma clipped stats
+        L1mean,L1med,L1sigma,L1fwhm = hdr['L1MEAN'],hdr['L1MEDIAN'],hdr['L1SIGMA'],hdr['L1FWHM'] # counts, fwhm in arcsec
+        mean_val, median_val, std_val = sigma_clipped_stats(data, sigma=2.)
+        WMSSKYBR = hdr['WMSSKYBR'] # mag/arcsec^2 of sky bkg measured
+        # AGGMAG the guide star magnitude header value would be simpler but it is given as unknown, ra/dec are provided for it though
+        # grab some other useful header values now
+        pixscale,saturate,maxlin = hdr['PIXSCALE'],hdr['SATURATE'],hdr['MAXLIN'] # arcsec/pixel, counts for saturation and non-linearity levels
+
+        # need bkg subtracted to extract stars, want to build ePSF using just star brightness
+        data -= median_val # L1med
+        nddata = NDData(data=data)
+        psfstars_extracted = extract_stars(nddata,catalogs=gaiacat, size=25)
+        # using the bbox of each star from results to determine intersections, dont want confusion of multi-stars for ePSF
+        # this was done with all stars not just those extracted, this is an optional sanity check but don't need it
+        intersections = []
+        for i,obj1 in enumerate(psfstars_extracted.bbox):
+            for j in range(i+1,len(psfstars_extracted.bbox)):
+                obj2 = psfstars_extracted.bbox[j]
+                if obj1.intersection(obj2):
+                    #print(obj1,obj2)
+                    # these are the ones to remove
+                    intersections.append(obj1)
+                    intersections.append(obj2)
+        # use the intersections found to remove stars
+        tmp = [i for i in psfstars_extracted] # get a list of stars rather than single photutils obj with all of them
+        for i in tmp:
+            if i.bbox in intersections:
+                tmp.remove(i)
+        #print('{} stars, after removing intersections'.format(len(tmp)))
+
+
+        # note ref.fits doesn't have saturate and maxlin available the image should be just one of the trims
+        for i in tmp:
+            if np.max(i.data) > saturate:
+                tmp.remove(i)
+            elif np.max(i.data) > maxlin:
+                tmp.remove(i)
+
+        print('removed stars above saturation or non-linearity level ~ {}, {} ADU; now have {}'.format(saturate,maxlin,len(tmp)))
+        psf_stars_selected = photutils.psf.EPSFStars(tmp)
+
+        """
+        # you should look at the images to make sure these are good stars
+        nrows = 4
+        ncols = 4
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 20),
+                                squeeze=True)
+        ax = ax.ravel()
+        for i in range(len(brightest_results)):
+            norm = simple_norm(stars[i], 'log', percent=99.)
+            ax[i].imshow(stars[i], norm=norm, origin='lower', cmap='viridis')
+        """
+        self.psfstars = psf_stars_selected
+
+        return
+
+    def build_epsf_model(self, fitsimage, starcoordinates,
+                         outfilename='psf.fits', oversampling=2):
+        """Build an effective PSF model from a set of stars in the image
+        Uses a list of star locations (from Gaia)  which are below
+        non-linearity/saturation
+        """
+        #TODO: whittle down to just the good stars (below saturation)
+        self.extract_psf_stars()
+        assert(self.psfstars is not None)
+
+        # TODO: accommodate other header keywords to get the stats we need
+        hdr = fitsimage.sci.header
+        L1mean = hdr['L1MEAN'] # for LCO: counts
+        L1med  = hdr['L1MEDIAN'] # for LCO: counts
+        L1sigma = hdr['L1SIGMA'] # for LCO: counts
+        L1fwhm = hdr['L1FWHM'] # for LCO: fwhm in arcsec
+        pixscale = hdr['PIXSCALE'] # arcsec/pixel
+        saturate = hdr['SATURATE'] # counts (saturation level)
+        maxlin = hdr['MAXLIN'] # counts (max level for linear pixel response)
+
+        # oversampling chops pixels of each star up further to get better fit
+        # this is okay since stacking multiple ...
+        # however more oversampled the ePSF is, the more stars you need to get smooth result
+        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement without any oversampling
+        # ePSF basic x,y,sigma 3 param model should be easily obtained if consider that 3*pixscale < fwhm
+        epsf_builder = EPSFBuilder(oversampling=oversampling, maxiters=10,
+                                   progress_bar=True)
+        epsf, fitted_stars = epsf_builder(self.psfstars)
+
+        self.epsf = epsf
+        self.fitted_stars = fitted_stars
+
+        if fitsimage.zeropoint is None:
+            fitsimage.measure_zeropoint()
+            self.zeropoint = fitsimage.zeropoint
+        return
+
+
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
@@ -328,6 +542,12 @@ class FakePlanter:
             self.searchim = FitsImage(searchim_fitsfilename)
         if templateim_fitsfilename:
             self.templateim = FitsImage(templateim_fitsfilename)
+
+        # has_fakes False until run plant_fakes
+        self.has_fakes = False
+        # has_lco_epsf False until run lco_epsf
+        self.has_lco_epsf = False
+        
         return
 
     @property
@@ -358,13 +578,11 @@ class FakePlanter:
 
     def has_fakes(self):
         """Check if fake stars have been planted in the image"""
-        return
+        return self.has_fakes
 
-
-    def plant_fakes(self):
+    def plant_fakes(self,epsf,locations,SCA=None,writetodisk=False,saveas="planted.fits"):
         """Function for planting fake stars in the diff image.
         """
-        # TODO : absorb plant_fakes.py module to here
         # using the ePSF model embedded in the fits file, plant a grid
         # of fakes or plant fakes around galaxies with varying magnitudes
         # (fluxes), mimicking strong-lensing sources
@@ -376,4 +594,63 @@ class FakePlanter:
         # a new fits file record in the image db that fakes have been
         # planted in the image
 
-        return
+        hdu = self.diffim.hdu # the fits opened difference image hdu
+
+        # copying so can leave original data untouched
+        cphdu = hdu.copy()
+        cpim = cphdu.data
+        cphdr = cphdu.header
+        
+        wcs,frame = WCS(cphdr),cphdr['RADESYS'].lower()
+        
+        # location should be list of pixels [(x1,y1),(x2,y2)...(xn,yn)]
+        n = 0
+        for pix in locations:
+            pix = list(pix)
+            xp,yp = pix
+            sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
+            idx = str(n).zfill(3) 
+            cphdr['FK{}X'.format(idx)] = xp
+            cphdr['FK{}Y'.format(idx)] = yp
+            cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+            cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+
+            if SCA:
+                # SCA ~ scaling factor for epsf, epsf*sca, needs to be list of floats same length as locations 
+                sca = SCA[n]
+                epsfn = epsf*sca
+            else:
+                # SCA ~ None, all the same brightness of input epsf
+                sca = 1
+                epsfn = epsf*sca
+            cphdr['FK{}SCA'.format(idx)] = sca
+            cphdr['FK{}F'.format(idx)] = np.sum(epsfn)
+
+            # TO-DO, once have actual epsf classes will be clearer to fill the model
+            cphdr['FK{}MOD'.format(idx)] = "NA"
+
+            revpix = copy.copy(pix)
+            revpix.reverse()
+            row,col=revpix
+            nrows,ncols=epsf.shape
+            # +2 in these to grab a couple more than needed, the correct shapes for broadcasting taken using actual psf.shapes
+            rows=np.arange(int(np.round(row-nrows/2)),int(np.round(row+nrows/2))+2) 
+            cols=np.arange(int(np.round(col-ncols/2)),int(np.round(col+ncols/2))+2) 
+            rows = rows[:epsf.shape[0]]
+            cols = cols[:epsf.shape[1]]
+            cpim[rows[:, None], cols] += epsfn
+            np.float64(cpim)
+
+            n+=1
+        
+        # inserting some new header values
+        cphdr['fakeSN']=True 
+        cphdr['N_fake']=str(len(locations))
+        cphdr['F_epsf']=str(np.sum(epsf))
+        
+        if writetodisk:
+            fits.writeto(saveas,cpim,cphdr,overwrite=True)
+        
+        self.has_fakes = True # if makes it through this plant_fakes update has_fakes
+
+        return cphdu
