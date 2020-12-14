@@ -80,10 +80,12 @@ def test_build_epsf_model(verbose=True):
     # TODO : Make a better name for the output file.
     # TODO : make the output file, then delete it?
     fitsimageobject.build_epsf_model(
-        fitsimageobject,
         outfilename='test_epsf.fits',
         verbose=verbose)
     assert(fitsimageobject.epsf is not None)
+
+
+
     return
 
 

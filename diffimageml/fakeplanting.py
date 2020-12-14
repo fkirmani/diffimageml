@@ -26,6 +26,7 @@ import copy
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
+_GAIACATEXT_ = 'ecsv'
 
 # Column names for the magnitudes and S/N to use for selecting viable PSF stars
 _GAIAMAGCOL_ =  'phot_rp_mean_mag'
@@ -293,7 +294,7 @@ class FitsImage:
         save_suffix: str
             If None, do not save to disk. If provided, save the Gaia source
             catalog to an ascii text file named as
-             <name_of_this_fits_file>_<save_suffix>.txt
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
 
         overwrite: boolean
             When True, fetch from the remote Gaia database even if a local
@@ -308,7 +309,7 @@ class FitsImage:
         #  catalog exists, and load the sources from there
         if save_suffix:
             root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-            savefilename = root + '_' + save_suffix + '.ecsv'
+            savefilename = root + '_' + save_suffix + '.' + _GAIACATEXT_
             if os.path.isfile(savefilename) and not overwrite:
                 print("Gaia catalog {} exists. \n".format(savefilename) + \
                       "Reading without fetching.")
@@ -385,7 +386,8 @@ class FitsImage:
 
         Requires that fetch_gaia_sources() has previously been run,
         with save_suffix provided to save the catalog as an ascii
-        text file named as <rootname_of_this_fits_file>_<save_suffix>.txt
+        text file named as
+        <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
 
         Parameters
         ----------
@@ -394,7 +396,7 @@ class FitsImage:
             The suffix of the Gaia source catalog filename.
         """
         root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-        catfilename = root + '_' + save_suffix + '.txt'
+        catfilename = root + '_' + save_suffix + '.' + _GAIACATEXT_
         if not os.path.isfile(catfilename):
             print("Error: {} does not exist.".format(catfilename))
             return -1
@@ -539,8 +541,7 @@ class FitsImage:
 
         return
 
-    def build_epsf_model(self, fitsimage,
-                         outfilename='psf.fits', oversampling=2,
+    def build_epsf_model(self, outfilename='epsfmodel.fits', oversampling=2,
                          verbose=False):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
@@ -554,7 +555,7 @@ class FitsImage:
         assert(self.psfstars is not None)
 
         # TODO: accommodate other header keywords to get the stats we need
-        hdr = fitsimage.sci.header
+        hdr = self.sci.header
         L1mean = hdr['L1MEAN'] # for LCO: counts
         L1med  = hdr['L1MEDIAN'] # for LCO: counts
         L1sigma = hdr['L1SIGMA'] # for LCO: counts
@@ -575,9 +576,8 @@ class FitsImage:
         self.epsf = epsf
         self.fitted_stars = fitted_stars
 
-        if fitsimage.zeropoint is None:
-            fitsimage.measure_zeropoint()
-            self.zeropoint = fitsimage.zeropoint
+        if self.zeropoint is None:
+            self.measure_zeropoint()
         return
 
 
