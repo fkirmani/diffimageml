@@ -23,9 +23,12 @@ from photutils import EllipticalAperture, detect_threshold, deblend_sources
 
 import itertools
 import copy
+import pickle
+
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
+_GAIACATEXT_ = 'ecsv'
 
 # Column names for the magnitudes and S/N to use for selecting viable PSF stars
 _GAIAMAGCOL_ =  'phot_rp_mean_mag'
@@ -140,7 +143,7 @@ class FitsImage:
         """
         Given a pixel location returns the skycoord
         """
-        hdu = self.hdu
+        hdu = self.sci
         hdr = hdu.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
         xp,yp = pixel
@@ -151,7 +154,7 @@ class FitsImage:
         """
         Given a skycoord (or list of skycoords) returns the pixel locations
         """
-        hdu = self.hdu
+        hdu = self.sci
         hdr = hdu.header
         wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
         pixel = wcsutils.skycoord_to_pixel(sky,wcs)
@@ -207,25 +210,25 @@ class FitsImage:
         # threshold = detect_threshold(hdu.data, nsigma=nsigma)
         # or you can provide a bkg of the same shape as data and this will be used
         boxsize=100
-        bkg = Background2D(self.hdu.data,boxsize) # sigma-clip stats for background est over image on boxsize, regions interpolated to give final map 
-        threshold = detect_threshold(self.hdu.data, nsigma=nsigma,background=bkg.background)
+        bkg = Background2D(self.sci.data,boxsize) # sigma-clip stats for background est over image on boxsize, regions interpolated to give final map 
+        threshold = detect_threshold(self.sci.data, nsigma=nsigma,background=bkg.background)
         ksigma = kfwhm * gaussian_fwhm_to_sigma  # FWHM pixels for kernel smoothing
         # optional ~ kernel smooths the image, using gaussian weighting
         kernel = Gaussian2DKernel(ksigma)
         kernel.normalize()
         # make a segmentation map, id sources defined as n connected pixels above threshold (n*sigma + bkg)
-        segm = detect_sources(self.hdu.data,
+        segm = detect_sources(self.sci.data,
                               threshold, npixels=npixels, filter_kernel=kernel)
         # deblend useful for very crowded image with many overlapping objects...
         # uses multi-level threshold and watershed segmentation to sep local peaks as ind obj
         # use the same number of pixels and filter as was used on original segmentation
         # contrast is fraction of source flux local pk has to be consider its own obj
         if deblend:
-            segm = deblend_sources(self.hdu.data, 
+            segm = deblend_sources(self.sci.data, 
                                            segm, npixels=5,filter_kernel=kernel, 
                                            nlevels=32,contrast=contrast)
         # need bkg subtracted to do photometry using source properties
-        data_bkgsub = self.hdu.data - bkg.background
+        data_bkgsub = self.sci.data - bkg.background
         cat = source_properties(data_bkgsub, segm,background=bkg.background,
                                 error=None,filter_kernel=kernel)
 
@@ -293,7 +296,7 @@ class FitsImage:
         save_suffix: str
             If None, do not save to disk. If provided, save the Gaia source
             catalog to an ascii text file named as
-             <name_of_this_fits_file>_<save_suffix>.txt
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
 
         overwrite: boolean
             When True, fetch from the remote Gaia database even if a local
@@ -308,7 +311,7 @@ class FitsImage:
         #  catalog exists, and load the sources from there
         if save_suffix:
             root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-            savefilename = root + '_' + save_suffix + '.ecsv'
+            savefilename = root + '_' + save_suffix + '.' + _GAIACATEXT_
             if os.path.isfile(savefilename) and not overwrite:
                 print("Gaia catalog {} exists. \n".format(savefilename) + \
                       "Reading without fetching.")
@@ -385,7 +388,8 @@ class FitsImage:
 
         Requires that fetch_gaia_sources() has previously been run,
         with save_suffix provided to save the catalog as an ascii
-        text file named as <rootname_of_this_fits_file>_<save_suffix>.txt
+        text file named as
+        <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
 
         Parameters
         ----------
@@ -394,7 +398,7 @@ class FitsImage:
             The suffix of the Gaia source catalog filename.
         """
         root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-        catfilename = root + '_' + save_suffix + '.txt'
+        catfilename = root + '_' + save_suffix + '.' + _GAIACATEXT_
         if not os.path.isfile(catfilename):
             print("Error: {} does not exist.".format(catfilename))
             return -1
@@ -415,6 +419,11 @@ class FitsImage:
         """
         Extract postage-stamp image cutouts of stars from the image, for use
         in building an ePSF model
+
+        Parameters
+        ----------
+
+        verbose: bool : verbose output
         """
         gaiacat = self.gaia_source_table
         image = self.sci
@@ -539,22 +548,33 @@ class FitsImage:
 
         return
 
-    def build_epsf_model(self, fitsimage,
-                         outfilename='psf.fits', oversampling=2,
-                         verbose=False):
+    def build_epsf_model(self, oversampling=2,
+                         verbose=False, save_suffix=None):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
         non-linearity/saturation
+
+        Parameters
+        ----------
+
+        oversampling: int : the oversampling scale for the PSF model. See the
+          photutils ePSF model documentation for details.
+
+        verbose: bool : verbose output
+
+        save_suffix: str
+            The suffix for the epsf model output filename.
+            If set to None, then no output file is generated
+
         """
         # TODO: check for existence of gaia source table and fetch/read it if needed
         #starcoordinates = fitsimage.gaia_source_table
 
-        #TODO: whittle down to just the good stars (below saturation)
         self.extract_psf_stars(verbose=verbose)
         assert(self.psfstars is not None)
 
         # TODO: accommodate other header keywords to get the stats we need
-        hdr = fitsimage.sci.header
+        hdr = self.sci.header
         L1mean = hdr['L1MEAN'] # for LCO: counts
         L1med  = hdr['L1MEDIAN'] # for LCO: counts
         L1sigma = hdr['L1SIGMA'] # for LCO: counts
@@ -565,9 +585,13 @@ class FitsImage:
 
         # oversampling chops pixels of each star up further to get better fit
         # this is okay since stacking multiple ...
-        # however more oversampled the ePSF is, the more stars you need to get smooth result
-        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement without any oversampling
-        # ePSF basic x,y,sigma 3 param model should be easily obtained if consider that 3*pixscale < fwhm
+        # however more oversampled the ePSF is, the more stars you need to get
+        # smooth result
+        # LCO is already oversampling the PSFs, the fwhm ~ 2 arcsec while
+        # pixscale ~ 0.4 arcsec; should be able to get good ePSF measurement
+        # without any oversampling
+        # ePSF basic x,y,sigma 3 param model should be easily obtained if
+        # consider that 3*pixscale < fwhm
         epsf_builder = EPSFBuilder(oversampling=oversampling, maxiters=10,
                                    progress_bar=True)
         epsf, fitted_stars = epsf_builder(self.psfstars)
@@ -575,11 +599,34 @@ class FitsImage:
         self.epsf = epsf
         self.fitted_stars = fitted_stars
 
-        if fitsimage.zeropoint is None:
-            fitsimage.measure_zeropoint()
-            self.zeropoint = fitsimage.zeropoint
+        if self.zeropoint is None:
+            self.measure_zeropoint()
+
+        # TODO : Can we save this ePSF model as a fits extension instead?
+        if save_suffix:
+            # Write out the ePSF model
+            # TODO: make a function for generating output file names
+            rootfilename = os.path.splitext(
+                os.path.splitext(self.filename)[0])[0]
+            epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
+            pickle.dump( self.epsf, open( epsf_filename, "wb" ) )
+
         return
 
+    def load_epsfmodel_from_pickle(self, save_suffix):
+        """Read in an ePSF model from a pickle file
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            The suffix for the epsf model filename to be read.
+        """
+        rootfilename = os.path.splitext(
+            os.path.splitext(self.filename)[0])[0]
+        epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
+        self.epsf = pickle.load(open( epsf_filename, "rb" ) )
+        return
 
 
 class FakePlanter:

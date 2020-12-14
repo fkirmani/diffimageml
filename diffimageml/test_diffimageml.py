@@ -76,14 +76,18 @@ def test_build_epsf_model(verbose=True):
     # Fetch gaia sources (read from disk if possible)
     fitsimageobject.fetch_gaia_sources(save_suffix='TestGaiaCat')
 
-    # Build the ePSF model
-    # TODO : Make a better name for the output file.
-    # TODO : make the output file, then delete it?
+    # Build the ePSF model and save to disk
     fitsimageobject.build_epsf_model(
-        fitsimageobject,
-        outfilename='test_epsf.fits',
-        verbose=verbose)
+        verbose=verbose, save_suffix='TestEPSFModel')
+
     assert(fitsimageobject.epsf is not None)
+    assert(fitsimageobject.epsf.data.sum()>0)
+
+    # read in the ePSF model we just created
+    fitsimageobject.read_epsf_model(save_suffix='TestEPSFModel')
+    assert(fitsimageobject.epsf is not None)
+    assert(fitsimageobject.epsf.data.sum()>0)
+
     return
 
 
@@ -92,14 +96,6 @@ def test_fakeplanter_class():
     fakeplanterobject = diffimageml.FakePlanter(
         _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
     return 1
-
-
-def test_checkepsfmodel(fakeplanterobject):
-    """Given a fakeplanterobject, check if it has an ePSF model"""
-    fakeplanterobject = diffimageml.FakePlanter(
-        _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
-    # TODO : get the fakeplanterobject passed on from above
-    return(fakeplanterobject.has_epsf_model)
 
 
 def test_fakeplanter(accuracy=0.05):
@@ -196,9 +192,9 @@ def test_diffimageml():
             print('Testing Gaia astroquery...', end='')
             total += 1
             test_fetch_gaia_sources()
-            print("Passed!")
+            print("Passed Gaia astroquery!")
     except Exception as e:
-        print('Failed')
+        print('Failed Gaia astroquery')
         print(traceback.format_exc())
         failed+=1
 
@@ -206,20 +202,20 @@ def test_diffimageml():
         print('Testing measure the zeropoint from known stars...', end='')
         total += 1
         test_measure_zeropoint()
-        print("Passed!")
+        print("Passed zeropoint measurement!")
     except Exception as e:
-        print('Failed')
+        print('Failed zeropoint measurement')
         print(traceback.format_exc())
         failed+=1
 
     try:
-        if not _GOFAST_:
+        if True: #not _GOFAST_:
             print('Testing ePSF model construction...', end='')
             total += 1
             test_build_epsf_model()
-            print("Passed!")
+            print("Passed ePSF model construction!")
     except Exception as e:
-        print('Failed')
+        print('Failed  ePSF model construction :(')
         print(traceback.format_exc())
         failed+=1
 
@@ -227,9 +223,9 @@ def test_diffimageml():
         print('Testing FakePlanter instantiation...', end='')
         total += 1
         test_fakeplanter_class()
-        print("Passed!")
+        print("Passed FakePlanter instantiation!")
     except Exception as e:
-        print('Failed')
+        print('Failed FakePlanter instantiation')
         print(traceback.format_exc())
         failed+=1
 
@@ -238,9 +234,9 @@ def test_diffimageml():
             print('Testing FakePlanter planting...', end='')
             total += 1
             test_fakeplanter(accuracy=0.05)
-            print("Passed!")
+            print("Passed  FakePlanter planting!")
     except Exception as e:
-        print('Failed')
+        print('Failed  FakePlanter planting')
         print(traceback.format_exc())
         failed+=1
 
@@ -255,9 +251,9 @@ def test_diffimageml():
                 detected = test_source_detection(diffimageml.FitsImage(_SEARCHIM1_))
             if not detected:
                 raise RuntimeError("Source detection successful, but no catalog found.")
-            print("Passed!")
+            print("Passed source detection!")
     except Exception as e:
-        print('Failed')
+        print('Failed source detection')
         print(traceback.format_exc())
         failed+=1
 
@@ -266,9 +262,9 @@ def test_diffimageml():
             print ("Testing Host Galaxy Detection...", end='')
             total += 1
             test_host_galaxy_detection(Image=FitsImage_Instance)
-        print ("Passed!")
+        print ("Passed host galaxy detection!")
     except Exception as e:
-        print('Failed')
+        print('Failed host galaxy detection')
         print(traceback.format_exc())
         failed += 1
 
