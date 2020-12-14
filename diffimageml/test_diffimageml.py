@@ -59,6 +59,14 @@ def test_fetch_gaia_sources():
 
 	return 1
 
+def test_build_epsf_model(fakeplanterobject):
+	"""Check construction of an ePSF model
+	from Gaia stars.
+	"""
+	fakeplanterobject.build_epsf_model()
+	assert(fakeplanterobject.has_epsf_model)
+	return
+
 
 def test_fakeplanter_class():
 	"""Create a FakePlanter object from the pristine (level 0) test data"""
@@ -142,10 +150,21 @@ def test_diffimageml():
 
 	try:
 		if not _DOFAST_:
-		    print('Testing Gaia astroquery...', end='')
-		    total += 1
-		    test_fetch_gaia_sources()
-		    print("Passed!")
+			print('Testing Gaia astroquery...', end='')
+			total += 1
+			test_fetch_gaia_sources()
+			print("Passed!")
+	except Exception as e:
+		print('Failed')
+		print(traceback.format_exc())
+		failed+=1
+
+	try:
+		if not _DOFAST_:
+			print('Testing ePSF model construction...', end='')
+			total += 1
+			test_build_epsf_model()
+			print("Passed!")
 	except Exception as e:
 		print('Failed')
 		print(traceback.format_exc())
