@@ -17,7 +17,7 @@ def pixtosky(self,pixel):
     """
     Given a pixel location returns the skycoord
     """
-    hdu = self.hdu
+    hdu = self.sci
     hdr = hdu.header
     wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
     xp,yp = pixel
@@ -28,7 +28,7 @@ def skytopix(self,sky):
     """
     Given a skycoord (or list of skycoords) returns the pixel locations
     """
-    hdu = self.hdu
+    hdu = self.sci
     hdr = hdu.header
     wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
     pixel = skycoord_to_pixel(sky,wcs)
@@ -40,7 +40,7 @@ def cut_hdu(self,location,size,writetodisk=False,saveas=None):
     if size is scalar gives a square dy=dx 
     updates hdr wcs keeps other info from original
     """
-    hdu = self.hdu
+    hdu = self.sci
     cphdu = hdu.copy()
     dat = cphdu.data
     hdr = cphdu.header
@@ -59,7 +59,7 @@ def cut_hdu(self,location,size,writetodisk=False,saveas=None):
 def get_lattice_positions(self):
     """Function for constructing list of pixels in a grid over the image"""
 
-    hdu = self.hdu
+    hdu = self.diffim.sci
     #reads number of rows/columns from header and creates a grid of locations for planting
     hdr = hdu.header
     wcs,frame=WCS(hdr),hdr['RADESYS'].lower()
@@ -87,7 +87,7 @@ def lco_epsf(self):
     At some point may want to have a class like telescope_psf where we can store pre-defined (i.e. not built) epsf
     """
     
-    hdu = self.searchim.hdu
+    hdu = self.searchim.sci
 
     # LCO measures PSF stored in header
     # L1FWHM ~ Frame FWHM in arcsec, PIXSCALE ~ arcsec/pixel

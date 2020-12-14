@@ -709,7 +709,7 @@ class FakePlanter:
         # a new fits file record in the image db that fakes have been
         # planted in the image
 
-        hdu = self.diffim.hdu # the fits opened difference image hdu
+        hdu = self.diffim.sci # the fits opened difference image hdu
 
         # copying so can leave original data untouched
         cphdu = hdu.copy()
@@ -769,3 +769,41 @@ class FakePlanter:
         self.has_fakes = True # if makes it through this plant_fakes update has_fakes
 
         return cphdu
+
+    def confusion_matrix(self,fp_detections=None):
+        """Function for creating confusion matrix of detections vs plants
+        """
+
+        #TO-DO decide what the confusion_matrix shoud look like
+        #imagining using the plant fits header for the plant detections and the threshold parameters for fp detections
+
+        #plant_detections a yet to be defined property
+        #will be something like a catalog/file with rows for each planted object 
+        #plants have a col for detect ~ 1 is detection (TP), 0 is non-detection (FN)
+        plants = self.plant_detections
+        
+        #fp_detections is the same type of catalog/file from plants detection but run using the clean diff
+        #default None will run it here
+        #need to make sure detection flag gets updated in plant hdr during the efficiency function once thats in here
+        
+        TP = [] # detected plant
+        FN = [] # not detected plant
+        FP = [] # detected, but not a plant, (all the detections on clean diffim)
+        TN = None # not detected not a plant, (no meaning)
+        for i in plants:
+            if i['detect'] == 1:
+                TP.append(i)
+            elif i['detect'] == 0:
+                FN.append(i)
+        TP = vstack(TP)
+        FN = vstack(FN)
+        
+        if clean_detections:
+            FP = clean_detections
+        else:
+            # TO-DO set the parameters in detect_sources using vals from run on the plant 
+            # self.detection_vals = [nsigma,kfwhm,npixels,deblend,contrast]
+            FP = detect_sources(self.diffim.sci)
+        
+        return [TP,FN,FP,TN]
+    
