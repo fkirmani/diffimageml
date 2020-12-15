@@ -1,5 +1,5 @@
 import numpy as np
-import os
+import os, collections
 
 from astroquery.gaia import Gaia
 
@@ -41,7 +41,7 @@ _FSNCATEXT_ = 'ecsv'
 # Size of the box for each PSF star cutout (half width? or full?)
 #  Does this also set the size of the resulting ePSF model?
 _PSFSTARCUTOUTSIZE_ = 25 # pixels
-
+_MAX_N_PLANTS_ = 999
 
 class FakePlanterEPSFModel():
     """ A class for holding an effective PSF model.
@@ -164,13 +164,12 @@ class FitsImage:
         pixel = wcsutils.skycoord_to_pixel(sky,wcs)
         return pixel
 
-
-
+    @property
     def has_detections(self):
         """Check if a list of detected sources exists """
         return self.sourcecatalog is not None
 
-    def detect_sources(self,nsigma=2,kfwhm=2.0,npixels=5,deblend=False,contrast=.001):
+    def detect_sources(self,nsigma=2,kfwhm=2.0,npixels=5,deblend=False,contrast=.001, **kwargs):
         """Detect sources (transient candidates) in the diff image using
         the astropy.photutils threshold-based source detection algorithm.
 
@@ -238,7 +237,8 @@ class FitsImage:
 
         self.sourcecatalog = cat 
         return self.sourcecatalog
-        
+    
+
     def detect_host_galaxies(self , target_x , target_y , pixel_coords = True):
         """Detect sources  in the sky image using the astropy.photutils threshold-based
          source detection algorithm to get data on the host galaxies.  
@@ -276,7 +276,7 @@ class FitsImage:
         ##Add support to identify galaxies in the image
         
         
-        if not self.has_detections():
+        if not self.has_detections:
             self.detect_sources()
         hostgalaxies = []
         for i in self.sourcecatalog:
@@ -800,7 +800,8 @@ class FakePlanter:
         self.has_fakes = False
         # has_lco_epsf False until run lco_epsf
         self.has_lco_epsf = False
-        
+        # detection_efficiency None until calculated
+        self.detection_efficiency = None
         return
 
     @property
@@ -944,4 +945,119 @@ class FakePlanter:
             FP = detect_sources(self.diffim.sci)
         
         return [TP,FN,FP,TN]
-        
+    
+    def get_fake_locations(self,image_with_fakes):
+        fake_plant_x_keys = [key for key in image_with_fakes.header.keys() if\
+                         'FK' in key and 'X' in key]
+        fake_plant_x = [image_with_fakes.header[key] for key in fake_plant_x_keys]
+        fake_plant_y = []
+        for key in fake_plant_x_keys:
+            fake_id = key[2:2+len(str(_MAX_N_PLANTS_))]
+            fake_plant_y.append(image_with_fakes.header['FK%sY'%fake_id])
+        fake_positions = np.array([fake_plant_x,fake_plant_y]).T
+        return fake_positions
+
+    @property
+    def has_detection_efficiency(self):
+        return self.detection_efficiency is not None
+
+    def calculate_detection_efficiency(self,image_with_fakes=None,fake_plant_locations=None,source_catalog=None,**kwargs):
+        """
+        Given a difference image with fake sources planted and a detected 
+        source catalog, will calculate the detection efficiency.
+
+        Parameters
+        ----------
+        image_with_fakes : `~fakeplanting.FitsImage`
+            A fits image class containing the planted fake sources (default self.diffim)
+        fake_plant_locations : list or `~numpy.ndarray`
+            2D array containing the x,y locations of the fake sources (default read self.diffim.sci.header)
+        source_catalog : :class:`~photutils.segmentation.properties.SourceCatalog`
+            Detected source catalog 
+
+        Returns
+        -------
+        detection_efficiency : float
+        """
+        if image_with_fakes is None:
+            image_with_fakes = self.diffim
+
+        if source_catalog is None:
+            if isinstance(image_with_fakes,FitsImage):
+                if image_with_fakes.has_detections:
+                    source_catalog = image_with_fakes.sourcecatalog
+                else:
+                    source_catalog = self.diffim.detect_sources(**kwargs)
+            else:
+                raise RuntimeError("If image_with_fakes is not of type FitsImage, must provide a source_catalog.")
+
+        if fake_plant_locations is None:
+            if isinstance(image_with_fakes,FitsImage):
+                fake_plant_locations = self.get_fake_locations(image_with_fakes.sci)
+            else:
+                fake_plant_locations = self.get_fake_locations(image_with_fakes)
+        # use locations and a search radius on detections and plant locations to get true positives
+        tbl = source_catalog.to_table()
+        tbl_x,tbl_y = [i.value for i in tbl['xcentroid']], [i.value for i in tbl['ycentroid']]
+        tbl_pixels = list(zip(tbl_x,tbl_y))
+        tbl.add_column(Column(tbl_pixels),name='pix') # adding this for easier use indexing tbl later
+        search = 5 # fwhm*n might be better criteria
+        truths = []
+        for pixel in tbl_pixels:
+            for i in fake_plant_locations:
+                if pixel[0] > i[0] - search  and pixel[0] < i[0] + search and pixel[1] > i[1] - search and pixel[1] < i[1] + search:
+                    truths.append([tuple(i),pixel])
+                    #print(i,pixel)
+                else:
+                    continue
+        #print('{} source detections within search radius criteria'.format(len(truths)))
+        # TODO: get the tbl_pixels which were outside the search radius criteria and return them as false positives
+        # break truths into the plant pixels and det src pixel lists; easier to work w
+        plant_pixels = []
+        det_src_pixels = []
+        for i in truths:
+            plant_pix = i[0]
+            det_src_pix = i[1]
+            plant_pixels.append(plant_pix)
+            det_src_pixels.append(det_src_pix)
+        # the plant pixels which had multiple sources detected around it
+        repeat_plant = [item for item, count in collections.Counter(plant_pixels).items() if count > 1]
+        # the plant pixels which only had one source detected 
+        single_plant = [item for item, count in collections.Counter(plant_pixels).items() if count == 1]
+        N_plants_detected = len(single_plant) + len(repeat_plant)
+        # adding nearby_plantpix col to src table; using None if source wasnt within the search radius of plant
+        plant_col = []
+        for i in tbl:
+            tbl_x,tbl_y = i['xcentroid'].value,i['ycentroid'].value
+            if (tbl_x,tbl_y) in det_src_pixels:
+                idx = det_src_pixels.index((tbl_x,tbl_y))
+                plant_col.append(plant_pixels[idx])
+            else:
+                plant_col.append(None)
+        tbl.add_column(Column(plant_col),name='nearby_plantpix')
+        # index table to grab false source detections
+        false_tbl = tbl[tbl['nearby_plantpix']==None]
+        truth_tbl = tbl[tbl['nearby_plantpix']!=None]
+        single_truth_tbl,repeat_truth_tbl = [],[]
+        for i in truth_tbl:
+            if i['nearby_plantpix'] in repeat_plant:
+                repeat_truth_tbl.append(i)
+            else:
+                single_truth_tbl.append(i)
+        # should use a check on length rather than try/except below here
+        # try/excepting is to avoid error for empty lists
+        # mainly an issue on repeat truth tbl 
+        try:
+            single_truth_tbl = vstack(single_truth_tbl)
+        except:
+            pass
+        try:
+            repeat_truth_tbl = vstack(repeat_truth_tbl)
+        except:
+            pass            
+        #print('Final: {} planted SNe, {} clean single detections, {} as multi-sources near a plant, {} false detections'.format(Nfakes,len(single_truth_tbl),len(repeat_truth_tbl),len(false_tbl)))
+        #print('{} planted SNe had single clean source detected, {} planted SNe had multiple sources detected nearby, {} false detections'.format(len(single_plant),len(repeat_plant),len(false_tbl)))
+        efficiency = N_plants_detected/len(fake_plant_locations)
+        #print('Detection efficiency (N_plants_detected/N_plants) ~ {} on mag ~ {} SNe'.format(efficiency,magfakes))
+        self.detection_efficiency = efficiency
+        return self.detection_efficiency#,tbl,single_truth_tbl,repeat_truth_tbl,false_tbl
