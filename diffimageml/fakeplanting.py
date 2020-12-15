@@ -720,46 +720,51 @@ class FitsImage:
         elif add_to_filename != None:
         
             if os.path.exists(add_to_filename): 
-                ##File exists, so we add to it
+                ##File exists, so we add to the existing catalog
+                
                 self.read_fakesn_catalog(filename = add_to_filename)
-                print ("FIXME")
+                new_table = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
+                combined_table = vstack([self.fakesncat , new_table])
+                combined_table.write(add_to_filename , format = _FSNCATFORMAT_ , overwrite = True)
+                
             else:
                 ##File does not exist, so we make one
+                
                 self.fakesncat = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
                 self.fakesncat.write( add_to_filename , format =_FSNCATFORMAT_ , overwrite = True)
              
         return
         
-        def read_fakesn_catalog(self , savesuffix = "fakecat" , filename = None):
-            """
-            
-            Reads in a fake source catalog
-            
+    def read_fakesn_catalog(self , save_suffix = "fakecat" , filename = None):
+        """
+        
+        Reads in a fake source catalog
+        
 
-            Parameters
-            ----------
+        Parameters
+        ----------
 
-            save_suffix: str
-                If provided, read the fake sourc catalog named as
-                <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
-                Will be ignored if a filename is provided
+        save_suffix: str
+            If provided, read the fake sourc catalog named as
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
+            Will be ignored if a filename is provided
 
-            filename: str
-                If provided, will read in a catalog with this filename. Overwrites
-                any save_suffix that is provided
-            
-            self.fakesncat : Astropy Table : Contains information on the fake sources and
-            their host galaxies
-            
-            """
-            
-            if filename != None:
-                root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-                readname = root + "_" + save_suffix + "." + _FSNCATEXT_
-            else:
-                readname = filename
-            
-            self.fakesncat = Table.read(readname , format =_FSNCATFORMAT_)
+        filename: str
+            If provided, will read in a catalog with this filename. Overwrites
+            any save_suffix that is provided
+        
+        self.fakesncat : Astropy Table : Contains information on the fake sources and
+        their host galaxies
+        
+        """
+        
+        if filename != None:
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            readname = root + "_" + save_suffix + "." + _FSNCATEXT_
+        else:
+            readname = filename
+        
+        self.fakesncat = Table.read(readname , format =_FSNCATFORMAT_)
             
             
 class FakePlanter:
