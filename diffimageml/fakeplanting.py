@@ -34,6 +34,10 @@ _GAIACATEXT_ = 'ecsv'
 _GAIAMAGCOL_ =  'phot_rp_mean_mag'
 _GAIASNCOL_ = 'phot_rp_mean_flux_over_error'
 
+# astropy Table format for the fake SN source catalog
+_FSNCATFORMAT_ = 'ascii.ecsv'
+_FSNCATEXT_ = 'ecsv'
+
 # Size of the box for each PSF star cutout (half width? or full?)
 #  Does this also set the size of the resulting ePSF model?
 _PSFSTARCUTOUTSIZE_ = 25 # pixels
@@ -806,4 +810,28 @@ class FakePlanter:
             FP = detect_sources(self.diffim.sci)
         
         return [TP,FN,FP,TN]
+        
+    def write_to_catalog(self , save_suffix = "fakesncat" , overwrite = False):
+        
     
+        """Using astroquery, download a list of sources from the Gaia
+         catalog that are within the bounds of this image.
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            If None, do not save to disk. If provided, save the Gaia source
+            catalog to an ascii text file named as
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
+
+        overwrite: boolean
+            When True, overwrite current fake sn catalog
+            When False, add to current fake sn catalog
+
+        self.gaia_catalog : Astropy Table : Contains information on the fake sources and
+        their host galaxies
+        
+        """
+        
+        return
