@@ -89,6 +89,17 @@ def lco_epsf(self):
     
     hdu = self.searchim.sci
 
+    # want the epsf here to be same shape as build so can compare them
+    # TODO once build_epsf is working smoothly in each class rewrite 
+    try: 
+        self.epsf
+        epsf = self.epsf # the build_epsf
+        shape = epsf.shape
+        oversample = epsf.oversampling
+    except:
+        shape = (51,51)
+        oversample = 2
+
     # LCO measures PSF stored in header
     # L1FWHM ~ Frame FWHM in arcsec, PIXSCALE ~ arcsec/pixel
     hdr = hdu.header
@@ -98,7 +109,6 @@ def lco_epsf(self):
     sigma = gaussian_fwhm_to_sigma*l1fwhm
     sigma *= 1/pixscale # to pixels
     
-    shape = (50,50)
     constant,amplitude,xmean,ymean,xstd,ystd=0,1,shape[0]/2,shape[1]/2,sigma,sigma
     flux = 10**5 # if flux and amplitude present flux is ignored
     table = Table()
@@ -108,12 +118,53 @@ def lco_epsf(self):
     table['y_mean'] = [ymean]
     table['x_stddev'] = [sigma]
     table['y_stddev'] = [sigma]
-    epsf = photutils.datasets.make_gaussian_sources_image(shape, table,oversample=1)
+    epsf = photutils.datasets.make_gaussian_sources_image(shape, table,oversample=oversample)
 
     self.has_lco_epsf = True # update bool if makes it through this function
     self.lco_epsf = epsf
 
     return epsf
 
+def model2dG_build(self):
+    """Function to fit a 2d-Gaussian to the built epsf
+    """
+    
+    # TODO once build_epsf is working smoothly in each class rewrite 
+    try: 
+        self.epsf
+        epsf = self.epsf # the build_epsf
+    except:
+        epsf = self
+
+    # use photutils 2d gaussian fit on the built epsf
+    # TODO give option to restrict fit params, force xmean,ymean to be the ctr, constant to be zero
+    gaussian = photutils.centroids.fit_2dgaussian(epsf.data)
+    print(gaussian.param_names,gaussian.parameters)
+    # unpack the parameters of fit
+    constant,amplitude,x_mean,y_mean,x_stddev,y_stddev,theta=gaussian.parameters
+    # Theta is in degrees, rotating the sigma_x,sigma_y ccw from +x 
+    
+    # Put fit values into table 
+    # TODO the build_epsf is oversampled with respect to the fits image class data
+    # ie the x_stddev, y_stddev are scaled by the oversampling
+    # I think what makes the most sense is to rescale the build_epsf array, I'm not clear on how to do that
+    table = Table()
+    table['constant'] = [constant]
+    table['amplitude'] = [amplitude]
+    #table['flux'] = [flux] # if flux and amplitude flux is ignored
+    table['x_mean'] = [x_mean]
+    table['y_mean'] = [y_mean]
+    table['x_stddev'] = x_stddev #[x_stddev/epsf.oversampling[0]]
+    table['y_stddev'] = y_stddev #[y_stddev/epsf.oversampling[1]]
+    # theta is a ccw rotation from +x in deg
+    # ie the 2dgaussian grabs hold of a sigma_x sigma_y and then rotated
+    table['theta'] = [theta]
+    
+    # get epsf of the model fit     
+    shape=epsf.shape
+    modeled_epsf = make_gaussian_sources_image(shape, table)
+    resid = modeled_epsf.data - epsf.data
+    
+    return gaussian,table,modeled_epsf
 
 
