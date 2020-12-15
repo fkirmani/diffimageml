@@ -34,6 +34,10 @@ _GAIACATEXT_ = 'ecsv'
 _GAIAMAGCOL_ =  'phot_rp_mean_mag'
 _GAIASNCOL_ = 'phot_rp_mean_flux_over_error'
 
+# astropy Table format for the fake SN source catalog
+_FSNCATFORMAT_ = 'ascii.ecsv'
+_FSNCATEXT_ = 'ecsv'
+
 # Size of the box for each PSF star cutout (half width? or full?)
 #  Does this also set the size of the resulting ePSF model?
 _PSFSTARCUTOUTSIZE_ = 25 # pixels
@@ -628,7 +632,141 @@ class FitsImage:
         self.epsf = pickle.load(open( epsf_filename, "rb" ) )
         return
 
+    def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
+        
+    
+        """
+        
+        Writes information for fake sources into a fake source catalog
+        Will include the locations and epsf models for all of the fake sources
+        
+        
 
+        Parameters
+        ----------
+
+        save_suffix: str
+            If None, do not save to disk. If provided, save the fake source
+            catalog to an ascii text file named as
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
+
+        overwrite: boolean
+            When True, overwrite an existing fake sn catalog
+            Otherwise, will only save catalog if it does not already exist
+            
+            
+        add_to_filename: str
+            If None, this is ignored. If provided, the souce catalog from this
+            image will be appended to the given file. Designed to create a catalog
+            containing fake sources from multiple images. Will still produce a catalog
+            for this image using save_suffix, unless save_suffix = None
+        
+        self.fakesncat : Astropy Table : Contains information on the fake sources and
+        their host galaxies
+        
+        """
+        
+        
+        fakes = []
+        file_header = self.hdulist[0].header
+        
+        # If we are not adding to an existing file
+        if save_suffix != None:
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            savename = root + "_" + save_suffix + "." + _FSNCATEXT_
+            
+            ##If file exists and not overwrite, exit now.
+            if os.path.exists(savename) and not overwrite:
+                print ("Warning: Fake SN catalog exists. Will not overwrite, so we won't save the catalog.")
+                savename = None
+                
+        elif save_suffix == None: ##Don't save catalog for this image
+            savename = None
+            
+        
+        RA = []
+        DEC = []
+        SCA = []
+        F = []
+        MOD = []
+        X = []
+        Y = []
+        for i in file_header.keys():
+             if i[0:2] == "FK" and int(i[2:5]) not in fakes: #Identify header entries for fake SN
+                N = i[2:5]
+                fakes.append(int(N))
+                RA.append(file_header["FK" + str(N) + "RA"])
+                DEC.append(file_header["FK" + str(N) + "DEC"])
+                SCA.append(file_header["FK" + str(N) + "SCA"])
+                F.append(file_header["FK" + str(N) + "MOD"])
+                MOD.append(file_header["FK" + str(N) + "MOD"])
+                X.append(file_header["FK" + str(N) + "X"])
+                Y.append(file_header["FK" + str(N) + "Y"])
+
+        racol = Column(RA , name = "ra")
+        deccol = Column(DEC , name = "dec")
+        scacol = Column(SCA , name = "sca")
+        fcol = Column(F , name = "F")
+        modcol = Column(MOD , name = "mod")
+        xcol = Column(X , name = "x")
+        ycol = Column(Y , name = "y")
+        
+        
+        if savename != None: ##Writes (or overwrites) new file 
+        
+            self.fakesncat = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
+            self.fakesncat.write( savename , format =_FSNCATFORMAT_ , overwrite = True)
+            
+        elif add_to_filename != None:
+        
+            if os.path.exists(add_to_filename): 
+                ##File exists, so we add to the existing catalog
+                
+                self.read_fakesn_catalog(filename = add_to_filename)
+                new_table = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
+                combined_table = vstack([self.fakesncat , new_table])
+                combined_table.write(add_to_filename , format = _FSNCATFORMAT_ , overwrite = True)
+                
+            else:
+                ##File does not exist, so we make one
+                
+                self.fakesncat = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
+                self.fakesncat.write( add_to_filename , format =_FSNCATFORMAT_ , overwrite = True)
+             
+        return
+        
+    def read_fakesn_catalog(self , save_suffix = "fakecat" , filename = None):
+        """
+        
+        Reads in a fake source catalog
+        
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            If provided, read the fake sourc catalog named as
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
+            Will be ignored if a filename is provided
+
+        filename: str
+            If provided, will read in a catalog with this filename. Overwrites
+            any save_suffix that is provided
+        
+        self.fakesncat : Astropy Table : Contains information on the fake sources and
+        their host galaxies
+        
+        """
+        
+        if filename != None:
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            readname = root + "_" + save_suffix + "." + _FSNCATEXT_
+        else:
+            readname = filename
+        
+        self.fakesncat = Table.read(readname , format =_FSNCATFORMAT_)
+            
+            
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
     planting fakes, detecting fakes, and creating sub-images and
@@ -806,4 +944,4 @@ class FakePlanter:
             FP = detect_sources(self.diffim.sci)
         
         return [TP,FN,FP,TN]
-    
+        
