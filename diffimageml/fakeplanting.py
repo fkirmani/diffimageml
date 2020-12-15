@@ -632,6 +632,49 @@ class FitsImage:
         self.epsf = pickle.load(open( epsf_filename, "rb" ) )
         return
 
+    def write_to_catalog(self , save_suffix = "fakesncat" , overwrite = False):
+        
+    
+        """
+        
+        Writes information for fake sources into a fake source catalog
+        Will include the locations and epsf models for all of the fake sources
+        
+        
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            If None, do not save to disk. If provided, save the Gaia source
+            catalog to an ascii text file named as
+            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
+
+        overwrite: boolean
+            When True, overwrite current fake sn catalog
+            When False, add to current fake sn catalog
+
+        self.gaia_catalog : Astropy Table : Contains information on the fake sources and
+        their host galaxies
+        
+        """
+        
+        fakes = []
+        fname = "fakecat.txt"
+        f = open(fname , "w")
+        file_header = self.hdulist[0].header
+        
+        for i in file_header.keys():
+             if i[0:2] == "FK" and int(i[2:5]) not in fakes: #Identify header entries for fake SN
+                N = i[2:5]
+                fakes.append(int(N))
+                print (N)
+                f.write(str(N) + "|" + file_header["FK" + str(N) + "RA"] + file_header["FK" + str(N) + "DEC"] +"\n")
+        
+        f.close()
+        
+        return
+
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
@@ -811,27 +854,3 @@ class FakePlanter:
         
         return [TP,FN,FP,TN]
         
-    def write_to_catalog(self , save_suffix = "fakesncat" , overwrite = False):
-        
-    
-        """Using astroquery, download a list of sources from the Gaia
-         catalog that are within the bounds of this image.
-
-        Parameters
-        ----------
-
-        save_suffix: str
-            If None, do not save to disk. If provided, save the Gaia source
-            catalog to an ascii text file named as
-            <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
-
-        overwrite: boolean
-            When True, overwrite current fake sn catalog
-            When False, add to current fake sn catalog
-
-        self.gaia_catalog : Astropy Table : Contains information on the fake sources and
-        their host galaxies
-        
-        """
-        
-        return
