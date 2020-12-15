@@ -2,7 +2,7 @@ from __future__ import print_function
 import os
 from astropy.tests.helper import TestRunner
 
-from .fakesnplanter import *
+from .fakeplanting import *
 from .util import *
 from .detect_sources import *
 from .build_ePSF import *

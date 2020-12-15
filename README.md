@@ -13,3 +13,6 @@ Outputs: categorization score for any transient candidates in the image using th
 
 Target datasets:  Strong lensing systems observed with Las Cumbres Observatory and the Hubble Space Telescope; simulated images for the Rubin Observatory LSST and Roman Space Telescope.
 
+### Acknowledgements
+
+Makes use of Gaia data: https://www.cosmos.esa.int/web/gaia-users/credits

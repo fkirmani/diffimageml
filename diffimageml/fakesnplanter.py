@@ -1,13 +1,24 @@
 import numpy as np
 
+import astropy
+from astropy import units as u
+from astroquery.gaia import Gaia
+from astropy.coordinates import SkyCoord
+from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
+from astropy.table import Table,Column,Row,vstack,setdiff,join
 from astroquery.gaia import Gaia
 from astropy.io import ascii,fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, utils as wcsutils
 from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
 from astropy.convolution import Gaussian2DKernel
 
+import photutils
+from photutils.datasets import make_gaussian_sources_image
 from photutils import Background2D, MedianBackground, detect_threshold,detect_sources,source_properties
 from photutils.psf import EPSFModel
+
+import itertools
+import copy
 
 class FakePlanterEPSFModel(EPSFModel):
     """ A class for holding an effective PSF model."""
@@ -61,18 +72,58 @@ class FitsImage:
         hdu : :class:`~astropy.io.fits.PrimaryHDU` (or similar)
 
         """
-        hdulist = fits.open(fitsfilename)
+        self.hdulist = fits.open(fitsfilename)
         self.filename = fitsfilename
+        if 'SCI' in self.hdulist:
+            self.sci = self.hdulist['SCI']
+        else:
+            for i in range(len(self.hdulist)):
+                if self.hdulist[i].data is not None:
+                    self.sci = self.hdulist[i]
+
+        # image World Coord System
+        self.wcs = WCS(self.sci.header)
+
+        # Sky coordinate frame
+        # TODO : Not sure we can expect the RADESYS keyword is always present.
+        # Maybe there's an astropy function to get this in a more general way?
+        self.frame = self.sci.header['RADESYS'].lower()
+
         # TODO
         #
         #Let's make sure that this is 
         #true in general, or change if not.
         #
         if fitsfilename.endswith('fz'):
-            return hdulist, hdulist[1]
+            return self.hdulist, self.hdulist[1]
         else:
-            return hdulist, hdulist[0]
+            return self.hdulist, self.hdulist[0]
+        # TODO : remove the return statemens after confirming that no calling
+        # functions need them.
         
+    def pixtosky(self,pixel):
+        """
+        Given a pixel location returns the skycoord
+        """
+        hdu = self.hdu
+        hdr = hdu.header
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
+        xp,yp = pixel
+        sky = pixel_to_skycoord(xp,yp,wcs)
+        return sky
+
+    def skytopix(self,sky):
+        """
+        Given a skycoord (or list of skycoords) returns the pixel locations
+        """
+        hdu = self.hdu
+        hdr = hdu.header
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
+        pixel = skycoord_to_pixel(sky,wcs)
+        return pixel
+
+
+
     def has_detections(self):
         """Check if a list of detected sources exists """
         return self.sourcecatalog is not None
@@ -160,6 +211,7 @@ class FitsImage:
             Either the y pixel coordinate or the dec for the host galaxy
         pixel_coords: bool
             If true, input coordinates are assumed to be pixel coords
+        Sky coordinates will be assumed to be in degrees if units are not provided
             
         Returns
         -------
@@ -167,6 +219,16 @@ class FitsImage:
         self.hostgalaxies : array : contains information on all host galaxies in the image
         """
         
+        if not pixel_coords:
+            ##Set units to degrees unless otherwise specified
+            if type(pixel_coords) != u.quantity.Quantity:
+                target_x *= u.deg
+                target_y *= u.deg
+            C = SkyCoord(target_x,target_y)
+            ##Convert to pixel coordinates
+            pix = self.skytopix(C)
+            target_x = pix[0]
+            target_y = pix[1]
         ##TODO
         
         ##Add support to identify galaxies in the image
@@ -184,6 +246,66 @@ class FitsImage:
         
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
+
+    def fetch_gaia_sources(self, save_suffix=None):
+        #TODO: set default save_suffix='GaiaCat'):
+        """Using astroquery, download a list of sources from the Gaia
+         catalog that are within the bounds of this image.
+
+        Parameters
+        ----------
+
+        save_suffix: str
+            If None, do not save to disk. If provided, save the Gaia source
+            catalog to an ascii text file named as
+             <name_of_this_fits_file>_<save_suffix>.txt
+
+        Sets
+        -------
+        self.gaia_catalog : Astropy Table : contains information on all
+        Gaia sources in the image
+
+        """
+        # TODO : when save_suffix is provided, check first to see if a
+        #  catalog exists, and load the sources from there
+
+        # coord of central reference pixel
+        ra_ref = self.sci.header['CRVAL1']
+        dec_ref = self.sci.header['CRVAL2']
+        coord = SkyCoord(ra_ref, dec_ref, unit=(u.hourangle,u.deg))
+
+        ## Compute the pixel scale in units of arcseconds, from the CD matrix
+        #cd11 = self.sci.header['CD1_1'] # deg/pixel
+        #cd12 = self.sci.header['CD1_2'] # deg/pixel
+        #cd21 = self.sci.header['CD2_1'] # deg/pixel
+        #cd22 = self.sci.header['CD2_2'] # deg/pixel
+        #cdmatrix = [[cd11,cd12],[cd21,cd22]]
+        #pixelscale = np.sqrt(np.abs(np.linalg.det(cdmatrix))) * u.deg
+        pixelscale = np.sqrt(wcsutils.proj_plane_pixel_area(self.wcs))
+
+        # compute the width and height of the image from the NAXIS keywords
+        naxis1 = self.sci.header['NAXIS1']
+        naxis2 = self.sci.header['NAXIS2']
+        width = naxis1 * pixelscale * u.deg
+        height = naxis2 * pixelscale * u.deg
+
+        # Do the search. Returns an astropy Table
+        self.gaia_source_table = Gaia.query_object_async(
+            coordinate=coord, width=width, height=height)
+
+        # TODO : saving to file not yet debugged
+        if save_suffix:
+            savefilename = os.path.split_ext(self.fitsfilename)[0] +\
+                           '_' + save_suffix + '.txt'
+            if os.path.exists(savefilename):
+                os.remove(savefilename)
+            # TODO : make more space-efficient as a binary table?
+            self.gaia_source_table.write(
+                savefilename, format='ascii.fixed_width')
+            self.gaia_source_table.savefilename = savefilename
+
+        return
+
             
 
 class FakePlanter:
@@ -214,6 +336,12 @@ class FakePlanter:
             self.searchim = FitsImage(searchim_fitsfilename)
         if templateim_fitsfilename:
             self.templateim = FitsImage(templateim_fitsfilename)
+
+        # has_fakes False until run plant_fakes
+        self.has_fakes = False
+        # has_lco_epsf False until run lco_epsf
+        self.has_lco_epsf = False
+        
         return
 
     @property
@@ -244,13 +372,11 @@ class FakePlanter:
 
     def has_fakes(self):
         """Check if fake stars have been planted in the image"""
-        return
+        return self.has_fakes
 
-
-    def plant_fakes(self):
+    def plant_fakes(self,epsf,locations,SCA=None,writetodisk=False,saveas="planted.fits"):
         """Function for planting fake stars in the diff image.
         """
-        # TODO : absorb plant_fakes.py module to here
         # using the ePSF model embedded in the fits file, plant a grid
         # of fakes or plant fakes around galaxies with varying magnitudes
         # (fluxes), mimicking strong-lensing sources
@@ -262,4 +388,63 @@ class FakePlanter:
         # a new fits file record in the image db that fakes have been
         # planted in the image
 
-        return
+        hdu = self.diffim.hdu # the fits opened difference image hdu
+
+        # copying so can leave original data untouched
+        cphdu = hdu.copy()
+        cpim = cphdu.data
+        cphdr = cphdu.header
+        
+        wcs,frame = WCS(cphdr),cphdr['RADESYS'].lower()
+        
+        # location should be list of pixels [(x1,y1),(x2,y2)...(xn,yn)]
+        n = 0
+        for pix in locations:
+            pix = list(pix)
+            xp,yp = pix
+            sky = pixel_to_skycoord(xp,yp,wcs)
+            idx = str(n).zfill(3) 
+            cphdr['FK{}X'.format(idx)] = xp
+            cphdr['FK{}Y'.format(idx)] = yp
+            cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+            cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+
+            if SCA:
+                # SCA ~ scaling factor for epsf, epsf*sca, needs to be list of floats same length as locations 
+                sca = SCA[n]
+                epsfn = epsf*sca
+            else:
+                # SCA ~ None, all the same brightness of input epsf
+                sca = 1
+                epsfn = epsf*sca
+            cphdr['FK{}SCA'.format(idx)] = sca
+            cphdr['FK{}F'.format(idx)] = np.sum(epsfn)
+
+            # TO-DO, once have actual epsf classes will be clearer to fill the model
+            cphdr['FK{}MOD'.format(idx)] = "NA"
+
+            revpix = copy.copy(pix)
+            revpix.reverse()
+            row,col=revpix
+            nrows,ncols=epsf.shape
+            # +2 in these to grab a couple more than needed, the correct shapes for broadcasting taken using actual psf.shapes
+            rows=np.arange(int(np.round(row-nrows/2)),int(np.round(row+nrows/2))+2) 
+            cols=np.arange(int(np.round(col-ncols/2)),int(np.round(col+ncols/2))+2) 
+            rows = rows[:epsf.shape[0]]
+            cols = cols[:epsf.shape[1]]
+            cpim[rows[:, None], cols] += epsfn
+            np.float64(cpim)
+
+            n+=1
+        
+        # inserting some new header values
+        cphdr['fakeSN']=True 
+        cphdr['N_fake']=str(len(locations))
+        cphdr['F_epsf']=str(np.sum(epsf))
+        
+        if writetodisk:
+            fits.writeto(saveas,cpim,cphdr,overwrite=True)
+        
+        self.has_fakes = True # if makes it through this plant_fakes update has_fakes
+
+        return cphdu
