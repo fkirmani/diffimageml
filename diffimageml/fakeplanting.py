@@ -632,7 +632,7 @@ class FitsImage:
         self.epsf = pickle.load(open( epsf_filename, "rb" ) )
         return
 
-    def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False):
+    def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
         
     
         """
@@ -651,19 +651,38 @@ class FitsImage:
             <rootname_of_this_fits_file>_<save_suffix>.<_GAIACATEXT_>
 
         overwrite: boolean
-            When True, overwrite current fake sn catalog
-            When False, add to current fake sn catalog
-
-        self.gaia_catalog : Astropy Table : Contains information on the fake sources and
+            When True, overwrite an existing fake sn catalog
+            Otherwise, will only save catalog if it does not already exist
+            
+            
+        add_to_filename: str
+            If None, this is ignored. If provided, the souce catalog from this
+            image will be appended to the given file. Designed to create a catalog
+            containing fake sources from multiple images. Will still produce a catalog
+            for this image using save_suffix, unless save_suffix = None
+        
+        self.fakesncat : Astropy Table : Contains information on the fake sources and
         their host galaxies
         
         """
         
+        
         fakes = []
         file_header = self.hdulist[0].header
         
-        root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-        savename = root + "_" + save_suffix + "." + _FSNCATEXT_
+        # If we are not adding to an existing file
+        if save_suffix != None:
+            root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+            savename = root + "_" + save_suffix + "." + _FSNCATEXT_
+            
+            ##If file exists and not overwrite, exit now.
+            if os.path.exists(savename) and not overwrite:
+                print ("Warning: Fake SN catalog exists. Will not overwrite, so we won't save the catalog.")
+                savename = None
+                
+        elif save_suffix == None: ##Don't save catalog for this image
+            savename = None
+            
         
         RA = []
         DEC = []
@@ -684,7 +703,6 @@ class FitsImage:
                 X.append(file_header["FK" + str(N) + "X"])
                 Y.append(file_header["FK" + str(N) + "Y"])
 
-
         racol = Column(RA , name = "ra")
         deccol = Column(DEC , name = "dec")
         scacol = Column(SCA , name = "sca")
@@ -692,13 +710,23 @@ class FitsImage:
         modcol = Column(MOD , name = "mod")
         xcol = Column(X , name = "x")
         ycol = Column(Y , name = "y")
-        
         self.fakesncat = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
         
-        self.fakesncat.write( savename , format =_FSNCATFORMAT_ , overwrite = True)
+        if savename != None: ##Writes (or overwrites) new file 
+            
+            self.fakesncat.write( savename , format =_FSNCATFORMAT_ , overwrite = True)
+            
+        elif add_to_filename != None:
         
+            if os.path.exists(add_to_filename): 
+                ##File exists, so we add to it
+                print ("FIXME")
+            else:
+                ##File does not exist, so we make one
+                self.fakesncat.write( add_to_filename , format =_FSNCATFORMAT_ , overwrite = True)
+             
         return
-
+        
 
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
