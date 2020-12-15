@@ -135,11 +135,10 @@ def test_source_detection(FitsImageTest):
     return FitsImageTest.has_detections()
 
 def test_detection_efficiency():
-	
-	fakeplanterobject = diffimageml.FakePlanter(
+    fakeplanterobject = diffimageml.FakePlanter(
         _FAKEDIFFIM2_)
-	eff = fakeplanterobject.calculate_detection_efficiency()
-	return eff
+    eff = fakeplanterobject.calculate_detection_efficiency()
+    return eff
 
 def test_host_galaxy_detection(Image=None):
     import numpy as np
@@ -174,6 +173,7 @@ def test_diffimageml():
         print("GO FAST!  SKIPPING SLOW TESTS")
     failed=0
     total=0
+    skipped=0
     # Fill in tests here.  Put a separate try/except around each test and track
     # the count of total tests and failures
     try:
@@ -204,6 +204,8 @@ def test_diffimageml():
             total += 1
             test_fetch_gaia_sources()
             print("Passed Gaia astroquery!")
+        else:
+            skipped += 1
     except Exception as e:
         print('Failed Gaia astroquery')
         print(traceback.format_exc())
@@ -225,6 +227,8 @@ def test_diffimageml():
             total += 1
             test_build_epsf_model()
             print("Passed ePSF model construction!")
+        else:
+            skipped += 1
     except Exception as e:
         print('Failed  ePSF model construction :(')
         print(traceback.format_exc())
@@ -246,6 +250,9 @@ def test_diffimageml():
             total += 1
             test_fakeplanter(accuracy=0.05)
             print("Passed  FakePlanter planting!")
+        else:
+            skipped += 1
+
     except Exception as e:
         print('Failed  FakePlanter planting')
         print(traceback.format_exc())
@@ -263,6 +270,8 @@ def test_diffimageml():
             if not detected:
                 raise RuntimeError("Source detection successful, but no catalog found.")
             print("Passed source detection!")
+        else:
+            skipped += 1
     except Exception as e:
         print('Failed source detection')
         print(traceback.format_exc())
@@ -273,24 +282,31 @@ def test_diffimageml():
             print ("Testing Host Galaxy Detection...", end='')
             total += 1
             test_host_galaxy_detection(Image=FitsImage_Instance)
-        print ("Passed host galaxy detection!")
+            print ("Passed host galaxy detection!")
+        else:
+            skipped += 1
     except Exception as e:
         print('Failed host galaxy detection')
         print(traceback.format_exc())
         failed += 1
 
     try:
-        print ("Testing Efficiency Calculation...", end='')
-        total += 1
-        test_detection_efficiency()
-        print ("Passed Efficiency Calculation!")
+        if not _GOFAST_:
+            print ("Testing Efficiency Calculation...", end='')
+            total += 1
+            test_detection_efficiency()
+            print ("Passed Efficiency Calculation!")
+        else:
+            skipped += 1
     except Exception as e:
         print('Failed Efficiency Calculation')
         print(traceback.format_exc())
         failed += 1
     
-
-    print('Passed %i/%i tests.'%(total-failed,total))
+    if _GOFAST_:
+        print('Passed %i/%i tests, skipped %i slow tests.'%(total-failed,total,skipped))
+    else:
+        print('Passed %i/%i tests.'%(total-failed,total))
 
     return
 
