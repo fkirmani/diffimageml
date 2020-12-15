@@ -937,8 +937,8 @@ class FakePlanter:
         TP = vstack(TP)
         FN = vstack(FN)
         
-        if clean_detections:
-            FP = clean_detections
+        if fp_detections:
+            FP = fp_detections
         else:
             # TO-DO set the parameters in detect_sources using vals from run on the plant 
             # self.detection_vals = [nsigma,kfwhm,npixels,deblend,contrast]
