@@ -239,11 +239,15 @@ class FitsImage:
         cat = source_properties(data_bkgsub, segm,background=bkg.background,
                                 error=None,filter_kernel=kernel)
 
+        # TODO the detection parameters into meta of table
+        meta = {'detect_params':{"nsigma":nsigma,"kfwhm":kfwhm,"npixels":npixels,
+                                                "deblend":deblend,"contrast":contrast}}
+
         self.sourcecatalog = cat 
         return self.sourcecatalog
     
 
-    def detect_host_galaxies(self , target_x , target_y , pixel_coords = True):
+    def detect_host_galaxies(self , target_x , target_y , pixel_coords = True,**kwargs):
         """Detect sources  in the sky image using the astropy.photutils threshold-based
          source detection algorithm to get data on the host galaxies.  
          '''
@@ -281,7 +285,7 @@ class FitsImage:
         
         
         if not self.has_detections:
-            self.detect_sources()
+            self.detect_sources(**kwargs)
         hostgalaxies = []
         for i in self.sourcecatalog:
             x=i.xcentroid.value
@@ -292,6 +296,53 @@ class FitsImage:
         
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
+
+    def get_lensed_locations(self,phis,ds):
+        """
+        Simulate lensed SN positions on host-galaxy ellipse
+
+        Parameters
+        ----------
+        phis : List or array (must be 1D)
+            Supernova angles CCW from host semimajor axis. degs
+        ds : List or array (must be 1D)
+            Supernova distances from host center. pixels 
+        Returns
+        -------
+        posflux : Array-like of shape (3, N) or `~astropy.table.Table`
+                Positions and fluxes for the objects to subtract.  If an array,
+                it is interpreted as ``(x, y, flux)``  If a table, the columns
+                'x_fit', 'y_fit', and 'flux_fit' must be present.
+        """
+        
+        hostgalaxies = self.templateim.hostgalaxies
+        hostgalaxy = hostgalaxies[0].to_table()
+        
+        x = hostgalaxy["xcentroid"][0].value # pix
+        y = hostgalaxy["ycentroid"][0].value # pix
+        location = (x,y)
+        
+        #xtheta ytheta defined analytically for segm image using variance then partial theta ~ 0 gives an ellipse 
+        a = hostgalaxy["semimajor_axis_sigma"][0].value # pix
+        b = hostgalaxy["semiminor_axis_sigma"][0].value # pix
+        orientation = hostgalaxy["orientation"][0].value # deg a-axis ccw from +x
+        
+        xs,ys,locs = [],[],[]
+        for i in range(len(phis)):
+            phi = phis[i]
+            d = ds[i]
+            xi = x+d*np.cos((orientation+phi)*np.pi/180)
+            yi = y+d*np.sin((orientation+phi)*np.pi/180)
+            xs.append(xi)
+            ys.append(yi)
+            locs.append((xi,yi))
+        
+        # put into table ready for entry as photutils subtract_psf posflux arg
+        flux = 10**4
+        fluxes = [flux for i in range(len(locs))]
+        posflux = Table(data=[xs,ys,fluxes],names=["x_fit","y_fit","flux_fit"],)
+        
+        return posflux
 
     def fetch_gaia_sources(self, save_suffix='GaiaCat', overwrite=False,
                            verbose=False):
