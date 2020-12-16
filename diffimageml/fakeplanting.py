@@ -439,12 +439,12 @@ class FitsImage:
             if i['mag'] < 16:
                 continue
                 
-            positions.append( ( i['x'] , i['y'] ) )
+            positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
         
         ##Set up the apertures
         apertures = CircularAperture(positions, r= 10)
         
-        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 4. * FWHM + 20)
+        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 20)
         annulus_masks = annulus_aperture.to_mask(method='center')
         
         ##Background subtraction using sigma clipped stats.
@@ -529,7 +529,6 @@ class FitsImage:
                     ha='left', va='top', color='teal', transform=ax.transAxes)
             plt.show()
 
->>>>>>> upstream/main
         return
 
 
