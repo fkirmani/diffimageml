@@ -25,6 +25,8 @@ import itertools
 import copy
 import pickle
 
+from matplotlib import pyplot as plt
+
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
@@ -411,7 +413,7 @@ class FitsImage:
         return 0
 
 
-    def measure_zeropoint(self):
+    def measure_zeropoint(self, showplot=False):
         """Measure the zeropoint of the image, using a set of
         known star locations and magnitudes, plus photutils aperture
         photometry of those stars.
@@ -442,14 +444,31 @@ class FitsImage:
         # Below here is the only actual code needed for this function
         # TODO: get star_mags and star_fluxes from the photometry tables
 
+        # mask non-positive flux measurements
+        #star_flux_ma = np.ma.masked_less_equal(star_flux, 0, copy=True)
+        ivalid = np.where(star_flux>0)
+        nvalid = len(ivalid)
+
         # measure the zeropoint from each star
-        zpt_fit = star_mag + 2.5 * np.log10(star_flux)
-        zpt_fit_err = np.sqrt(star_mag_err**2 + \
-                              (1.086 * star_flux_err / star_flux)**2 )
+        zpt_fit = star_mag[ivalid] + 2.5 * np.log10(star_flux[ivalid])
+        zpt_fit_err = np.sqrt(star_mag_err[ivalid]**2 +
+                              (1.086 * star_flux_err[ivalid]
+                               / star_flux[ivalid])**2 )
 
         # adopt the weighted average of all zeropoints from all stars
         # as the zeropoint for this image
         self.zeropoint = np.average( zpt_fit, weights=1/zpt_fit_err**2)
+
+        if showplot:
+            ax = plt.gca()
+            plt.errorbar(star_mag, zpt_fit, zpt_fit_err, marker='.', ls=' ', color='k')
+            ax.axhline(self.zeropoint, color='teal')
+            plt.xlabel('Stellar Magnitude from Catalog')
+            plt.ylabel('Inferred Zero Point')
+            ax.text(0.05, 0.95,
+                    'Weighted mean zeropoint = {:.2f}'.format(self.zeropoint),
+                    ha='left', va='top', color='teal', transform=ax.transAxes)
+            plt.show()
 
         return
 
