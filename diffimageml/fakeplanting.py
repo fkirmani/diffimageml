@@ -20,6 +20,7 @@ from photutils.psf import EPSFModel, extract_stars
 from photutils import EPSFBuilder, BoundingBox
 from photutils import Background2D, MedianBackground
 from photutils import EllipticalAperture, detect_threshold, deblend_sources
+from photutils import CircularAperture , aperture_photometry , CircularAnnulus
 
 import itertools
 import copy
@@ -108,6 +109,7 @@ class FitsImage:
 
         self.sourcecatalog = None
         self.zeropoint = None
+        self.stellar_phot_table = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -411,6 +413,63 @@ class FitsImage:
         self.gaia_source_table = Table.read(
             catfilename, format=_GAIACATFORMAT_)
         return 0
+        
+    def do_stellar_photometry(self , gaia_catalog):
+        """Takes in a source catalog for stars in the image from Gaia. Will perform
+        aperture photometry on the sources listed in this catalog.
+
+        Parameters
+        ----------
+
+        gaia_catalog: Astropy Table : Contains information on Gaia sources in the image
+        
+        self.stellar_phot_table : Astropy Table : Table containing the measured magnitudes
+        for the stars in the image obtained from the Gaia catalog.
+        
+        """
+        
+        ##TODO: Add something to handle overstaturated sources
+        ##TODO: Improve aperture sizes
+        ##We currently just ignore anything brighter than m = 16 to avoid saturated sources
+        
+        positions = []
+        
+        for i in gaia_catalog:
+        
+            if i['mag'] < 16:
+                continue
+                
+            positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
+        
+        ##Set up the apertures
+        apertures = CircularAperture(positions, r= 10)
+        
+        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 20)
+        annulus_masks = annulus_aperture.to_mask(method='center')
+        
+        ##Background subtraction using sigma clipped stats.
+        ##Uses a median value from the annulus
+        bkg_median = []
+        for mask in annulus_masks:
+            annulus_data = mask.multiply(self.sci.data)
+            annulus_data_1d = annulus_data[mask.data > 0]
+            _ , median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
+            bkg_median.append(median_sigclip)
+            
+        ##Perform photometry and subtract out background
+        bkg_median = np.array(bkg_median)
+        phot = aperture_photometry(self.sci.data, apertures)
+        phot['annulus_median'] = bkg_median
+        phot['aper_bkg'] = bkg_median * apertures.area
+        
+        
+        phot['aper_sum_bkgsub'] = phot['aperture_sum'] - phot['aper_bkg']
+        
+        phot['mag'] = -2.5 * np.log10( phot['aper_sum_bkgsub'] )
+        
+        self.stellar_phot_table = phot
+        
+        return
 
 
     def measure_zeropoint(self, showplot=False):
