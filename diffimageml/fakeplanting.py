@@ -414,8 +414,43 @@ class FitsImage:
     def measure_zeropoint(self):
         """Measure the zeropoint of the image, using a set of
         known star locations and magnitudes, plus photutils aperture
-        photometry of those stars. """
-        # TODO : measure the zeropoint
+        photometry of those stars.
+
+        NOTE: currently using made-up data!!
+        """
+
+        # TODO : This is made-up data.
+        #  update this with the actual measured fluxes and magnitudes
+
+        # fix the zpt (for simulating data)
+        zpt = 25.0
+
+        # make some (perfect) flux and mag data
+        star_flux = np.random.uniform(0.01, 300.0, 100)
+        star_mag = -2.5 * np.log10(star_flux) + zpt
+
+        # define an uncertainty for each flux point
+        star_flux_err = np.sqrt(star_flux)
+
+        # define an error from the catalog, here fixed at 0.05 mag
+        star_mag_err = np.ones(100) * 0.05
+
+        # add some scatter to the 'measured' fluxes
+        star_flux += np.random.normal(0, star_flux_err, 100)
+
+        # --------------------------------------------------
+        # Below here is the only actual code needed for this function
+        # TODO: get star_mags and star_fluxes from the photometry tables
+
+        # measure the zeropoint from each star
+        zpt_fit = star_mag + 2.5 * np.log10(star_flux)
+        zpt_fit_err = np.sqrt(star_mag_err**2 + \
+                              (1.086 * star_flux_err / star_flux)**2 )
+
+        # adopt the weighted average of all zeropoints from all stars
+        # as the zeropoint for this image
+        self.zeropoint = np.average( zpt_fit, weights=1/zpt_fit_err**2)
+
         return
 
 
