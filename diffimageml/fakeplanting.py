@@ -107,6 +107,7 @@ class FitsImage:
 
         self.sourcecatalog = None
         self.zeropoint = None
+        self.stellar_phot_table = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -436,17 +437,17 @@ class FitsImage:
             if i['mag'] < 16:
                 continue
             positions.append( ( i['x'] , i['y'] ) )
+        FWHM = float(self.sci.header['L1FWHM'])
+        apertures = CircularAperture(positions, r= 4. * FWHM)
         
-        apertures = CircularAperture(positions, r=10.)
-        
-        annulus_aperture = CircularAnnulus(positions, r_in = 20 , r_out = 25)
+        annulus_aperture = CircularAnnulus(positions, r_in = 4. * FWHM + 5 , r_out = 4. * FWHM + 10)
         annulus_masks = annulus_aperture.to_mask(method='center')
         
         bkg_median = []
         for mask in annulus_masks:
             annulus_data = mask.multiply(self.sci.data)
             annulus_data_1d = annulus_data[mask.data > 0]
-            _, median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
+            _ , median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
             bkg_median.append(median_sigclip)
         bkg_median = np.array(bkg_median)
         phot = aperture_photometry(self.sci.data, apertures)
@@ -455,6 +456,8 @@ class FitsImage:
         
         
         phot['aper_sum_bkgsub'] = phot['aperture_sum'] - phot['aper_bkg']
+        
+        phot['mag'] = 25 - 2.5 * np.log10( phot['aper_sum_bkgsub'] )
         
         self.stellar_phot_table = phot
         
@@ -475,10 +478,36 @@ class FitsImage:
         else:
             self.read_gaia_sources(save_suffix)
         
-        self.do_stellar_photometry(self.gaia_source_table)
         
+        if self.stellar_phot_table == None:
         
-                
+            self.do_stellar_photometry(self.gaia_source_table)
+            
+        zp = 0
+        N = 0
+
+        Gmags = []
+        for i in self.stellar_phot_table:
+            ##First, we find the magnitude for this source from Gaia
+            
+            x = i['xcenter'].value
+            y = i['ycenter'].value
+            for k in self.gaia_source_table:
+            
+                if k['x'] == x and k['y'] == y:
+
+                    mag = float(k['mag'])
+                    Gmags.append(mag)
+            if np.isnan(mag):
+                continue
+            
+            
+            zp += i['mag'] - mag
+            
+            N += 1
+        zp /= N
+        
+        self.zeropoint = zp
         
         return
 
