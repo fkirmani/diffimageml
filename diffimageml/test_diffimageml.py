@@ -63,6 +63,17 @@ def test_fetch_gaia_sources():
 
     return 1
 
+def test_photometry_of_stars():
+    """Check measuring photometry of known stars in the image"""
+    fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
+    # TODO: must also get gaia sources, but that's a separate test, should
+    #  do them in series, and pass the object along?
+    fitsimageobject.fetch_gaia_sources()
+    fitsimageobject.do_stellar_photometry(fitsimageobject.gaia_source_table)
+    assert(fitsimageobject.stellar_phot_table is not None)
+    return
+
+
 def test_measure_zeropoint():
     """Check measuring of zeropoint from known stars in the image"""
     fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
@@ -145,7 +156,7 @@ def test_host_galaxy_detection(Image=None):
     if Image == None:
         SkyImageClassInstance=diffimageml.FitsImage(_SEARCHIM1_)
         SkyImageClassInstance.detect_sources()
-    elif not Image.has_detections():
+    elif not Image.has_detections:
         Image.detect_sources()
         SkyImageClassInstance = Image
     else:
@@ -212,6 +223,16 @@ def test_diffimageml():
         failed+=1
 
     try:
+        print('Testing get photometry of known stars...', end='')
+        total += 1
+        test_photometry_of_stars()
+        print("Passed stellar photometry measurement!")
+    except Exception as e:
+        print('Failed stellar photometry measurement')
+        print(traceback.format_exc())
+        failed+=1
+
+    try:
         print('Testing measure the zeropoint from known stars...', end='')
         total += 1
         test_measure_zeropoint()
@@ -220,6 +241,7 @@ def test_diffimageml():
         print('Failed zeropoint measurement')
         print(traceback.format_exc())
         failed+=1
+
 
     try:
         if not _GOFAST_:
