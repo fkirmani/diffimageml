@@ -223,6 +223,16 @@ def test_diffimageml():
         failed+=1
 
     try:
+        print('Testing get photometry of known stars...', end='')
+        total += 1
+        test_photometry_of_stars()
+        print("Passed stellar photometry measurement!")
+    except Exception as e:
+        print('Failed stellar photometry measurement')
+        print(traceback.format_exc())
+        failed+=1
+
+    try:
         print('Testing measure the zeropoint from known stars...', end='')
         total += 1
         test_measure_zeropoint()
@@ -231,6 +241,7 @@ def test_diffimageml():
         print('Failed zeropoint measurement')
         print(traceback.format_exc())
         failed+=1
+
 
     try:
         if not _GOFAST_:
