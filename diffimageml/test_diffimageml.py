@@ -63,6 +63,17 @@ def test_fetch_gaia_sources():
 
     return 1
 
+def test_photometry_of_stars():
+    """Check measuring photometry of known stars in the image"""
+    fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
+    # TODO: must also get gaia sources, but that's a separate test, should
+    #  do them in series, and pass the object along?
+    fitsimageobject.fetch_gaia_sources()
+    fitsimageobject.do_stellar_photometry(fitsimageobject.gaia_source_table)
+    assert(fitsimageobject.stellar_phot_table is not None)
+    return
+
+
 def test_measure_zeropoint():
     """Check measuring of zeropoint from known stars in the image"""
     fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
