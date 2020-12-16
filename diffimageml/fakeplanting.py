@@ -419,13 +419,16 @@ class FitsImage:
         return
 
 
-    def extract_psf_stars(self, verbose=False):
+    def extract_psf_stars(self, SNthresh=100, verbose=False):
         """
         Extract postage-stamp image cutouts of stars from the image, for use
         in building an ePSF model
 
         Parameters
         ----------
+
+        SNthresh: float:  signal to noise threshold. Only stars with
+        S/N > SNthresh are used for PSF construction.
 
         verbose: bool : verbose output
         """
@@ -475,10 +478,11 @@ class FitsImage:
             print('{} stars, after removing intersections'.format(len(gaiacat)))
 
         # Limit to just stars with very good S/N
-        gaiacat_trimmed = gaiacat[gaiacat['signal_to_noise']>100]
+        gaiacat_trimmed = gaiacat[gaiacat['signal_to_noise']>SNthresh]
         if verbose:
-            print('restricting extractions to stars w/ S/N > 100' 
-                  'we have {} to consider'.format(len(gaiacat_trimmed)))
+            print('restricting extractions to stars w/ S/N > {}' 
+                  'we have {} to consider'.format(
+                SNthresh, len(gaiacat_trimmed)))
 
         # TODO? sort by the strongest signal/noise in r' filter
         # r.sort('phot_rp_mean_flux_over_error')
