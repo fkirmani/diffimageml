@@ -20,6 +20,7 @@ from photutils.psf import EPSFModel, extract_stars
 from photutils import EPSFBuilder, BoundingBox
 from photutils import Background2D, MedianBackground
 from photutils import EllipticalAperture, detect_threshold, deblend_sources
+from photutils import CircularAperture
 
 import itertools
 import copy
@@ -409,13 +410,41 @@ class FitsImage:
         self.gaia_source_table = Table.read(
             catfilename, format=_GAIACATFORMAT_)
         return 0
+        
+    def do_stellar_photometry(self , gaia_catalog):
+        """Takes in a source catalog for stars in the image from Gaia. Will perform
+        aperture photometry on the sources listed in this catalog.
+
+        Parameters
+        ----------
+
+        gaia_catalog: Astropy Table : Contains information on Gaia sources in the image
+        
+        self.stellar_phot_table : Astropy Table : Table containing the measured magnitudes
+        for the stars in the image obtained from the Gaia catalog.
+        
+        """
 
 
-    def measure_zeropoint(self):
+    def measure_zeropoint(self , save_suffix='GaiaCat'):
         """Measure the zeropoint of the image, using a set of
         known star locations and magnitudes, plus photutils aperture
         photometry of those stars. """
         # TODO : measure the zeropoint
+        
+        ##TODO : improve this bit
+        root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
+        catfilename = root + '_' + save_suffix + '.' + _GAIACATEXT_
+        if not os.path.isfile(catfilename):
+            self.fetch_gaia_sources(save_suffix)
+        else:
+            self.read_gaia_sources(save_suffix)
+        
+        self.do_stellar_photometry(self.gaia_source_table)
+        
+        
+                
+        
         return
 
 
