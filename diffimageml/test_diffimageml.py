@@ -156,7 +156,7 @@ def test_host_galaxy_detection(Image=None):
     if Image == None:
         SkyImageClassInstance=diffimageml.FitsImage(_SEARCHIM1_)
         SkyImageClassInstance.detect_sources()
-    elif not Image.has_detections():
+    elif not Image.has_detections:
         Image.detect_sources()
         SkyImageClassInstance = Image
     else:
