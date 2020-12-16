@@ -1,6 +1,7 @@
 # diffimageml
 
 [![Documentation Status](https://readthedocs.org/projects/diffimageml/badge/?version=latest)](http://diffimageml.readthedocs.org/en/latest/?badge=latest)
+
 Applying machine learning for transient detection/classification in difference images.
 
 
