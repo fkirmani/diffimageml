@@ -26,6 +26,8 @@ import itertools
 import copy
 import pickle
 
+from matplotlib import pyplot as plt
+
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
@@ -428,7 +430,7 @@ class FitsImage:
         
         ##TODO: Add something to handle overstaturated sources
         ##TODO: Improve aperture sizes
-        ##We currently just ignore anything brighter than m = 16
+        ##We currently just ignore anything brighter than m = 16 to avoid saturated sources
         
         positions = []
         
@@ -436,19 +438,25 @@ class FitsImage:
         
             if i['mag'] < 16:
                 continue
+                
             positions.append( ( i['x'] , i['y'] ) )
-        FWHM = float(self.sci.header['L1FWHM'])
-        apertures = CircularAperture(positions, r= 4. * FWHM)
         
-        annulus_aperture = CircularAnnulus(positions, r_in = 4. * FWHM + 5 , r_out = 4. * FWHM + 10)
+        ##Set up the apertures
+        apertures = CircularAperture(positions, r= 10)
+        
+        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 4. * FWHM + 20)
         annulus_masks = annulus_aperture.to_mask(method='center')
         
+        ##Background subtraction using sigma clipped stats.
+        ##Uses a median value from the annulus
         bkg_median = []
         for mask in annulus_masks:
             annulus_data = mask.multiply(self.sci.data)
             annulus_data_1d = annulus_data[mask.data > 0]
             _ , median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
             bkg_median.append(median_sigclip)
+            
+        ##Perform photometry and subtract out background
         bkg_median = np.array(bkg_median)
         phot = aperture_photometry(self.sci.data, apertures)
         phot['annulus_median'] = bkg_median
@@ -457,58 +465,71 @@ class FitsImage:
         
         phot['aper_sum_bkgsub'] = phot['aperture_sum'] - phot['aper_bkg']
         
-        phot['mag'] = 25 - 2.5 * np.log10( phot['aper_sum_bkgsub'] )
+        phot['mag'] = -2.5 * np.log10( phot['aper_sum_bkgsub'] )
         
         self.stellar_phot_table = phot
         
         return
 
 
-    def measure_zeropoint(self , save_suffix='GaiaCat'):
+    def measure_zeropoint(self, showplot=False):
         """Measure the zeropoint of the image, using a set of
         known star locations and magnitudes, plus photutils aperture
-        photometry of those stars. """
-        # TODO : measure the zeropoint
-        
-        ##TODO : improve this bit
-        root = os.path.splitext(os.path.splitext(self.filename)[0])[0]
-        catfilename = root + '_' + save_suffix + '.' + _GAIACATEXT_
-        if not os.path.isfile(catfilename):
-            self.fetch_gaia_sources(save_suffix)
-        else:
-            self.read_gaia_sources(save_suffix)
-        
-        
-        if self.stellar_phot_table == None:
-        
-            self.do_stellar_photometry(self.gaia_source_table)
-            
-        zp = 0
-        N = 0
+        photometry of those stars.
 
-        Gmags = []
-        for i in self.stellar_phot_table:
-            ##First, we find the magnitude for this source from Gaia
-            
-            x = i['xcenter'].value
-            y = i['ycenter'].value
-            for k in self.gaia_source_table:
-            
-                if k['x'] == x and k['y'] == y:
+        NOTE: currently using made-up data!!
+        """
 
-                    mag = float(k['mag'])
-                    Gmags.append(mag)
-            if np.isnan(mag):
-                continue
-            
-            
-            zp += i['mag'] - mag
-            
-            N += 1
-        zp /= N
-        
-        self.zeropoint = zp
-        
+        # TODO : This is made-up data.
+        #  update this with the actual measured fluxes and magnitudes
+
+        # fix the zpt (for simulating data)
+        zpt = 25.0
+
+        # make some (perfect) flux and mag data
+        star_flux = np.random.uniform(0.01, 300.0, 100)
+        star_mag = -2.5 * np.log10(star_flux) + zpt
+
+        # define an uncertainty for each flux point
+        star_flux_err = np.sqrt(star_flux)
+
+        # define an error from the catalog, here fixed at 0.05 mag
+        star_mag_err = np.ones(100) * 0.05
+
+        # add some scatter to the 'measured' fluxes
+        star_flux += np.random.normal(0, star_flux_err, 100)
+
+        # --------------------------------------------------
+        # Below here is the only actual code needed for this function
+        # TODO: get star_mags and star_fluxes from the photometry tables
+
+        # mask non-positive flux measurements
+        #star_flux_ma = np.ma.masked_less_equal(star_flux, 0, copy=True)
+        ivalid = np.where(star_flux>0)
+        nvalid = len(ivalid)
+
+        # measure the zeropoint from each star
+        zpt_fit = star_mag[ivalid] + 2.5 * np.log10(star_flux[ivalid])
+        zpt_fit_err = np.sqrt(star_mag_err[ivalid]**2 +
+                              (1.086 * star_flux_err[ivalid]
+                               / star_flux[ivalid])**2 )
+
+        # adopt the weighted average of all zeropoints from all stars
+        # as the zeropoint for this image
+        self.zeropoint = np.average( zpt_fit, weights=1/zpt_fit_err**2)
+
+        if showplot:
+            ax = plt.gca()
+            plt.errorbar(star_mag, zpt_fit, zpt_fit_err, marker='.', ls=' ', color='k')
+            ax.axhline(self.zeropoint, color='teal')
+            plt.xlabel('Stellar Magnitude from Catalog')
+            plt.ylabel('Inferred Zero Point')
+            ax.text(0.05, 0.95,
+                    'Weighted mean zeropoint = {:.2f}'.format(self.zeropoint),
+                    ha='left', va='top', color='teal', transform=ax.transAxes)
+            plt.show()
+
+>>>>>>> upstream/main
         return
 
 
