@@ -20,7 +20,7 @@ from photutils.psf import EPSFModel, extract_stars
 from photutils import EPSFBuilder, BoundingBox
 from photutils import Background2D, MedianBackground
 from photutils import EllipticalAperture, detect_threshold, deblend_sources
-from photutils import CircularAperture
+from photutils import CircularAperture , aperture_photometry , CircularAnnulus
 
 import itertools
 import copy
@@ -424,6 +424,41 @@ class FitsImage:
         for the stars in the image obtained from the Gaia catalog.
         
         """
+        
+        ##TODO: Add something to handle overstaturated sources
+        ##TODO: Improve aperture sizes
+        ##We currently just ignore anything brighter than m = 16
+        
+        positions = []
+        
+        for i in gaia_catalog:
+        
+            if i['mag'] < 16:
+                continue
+            positions.append( ( i['x'] , i['y'] ) )
+        
+        apertures = CircularAperture(positions, r=10.)
+        
+        annulus_aperture = CircularAnnulus(positions, r_in = 20 , r_out = 25)
+        annulus_masks = annulus_aperture.to_mask(method='center')
+        
+        bkg_median = []
+        for mask in annulus_masks:
+            annulus_data = mask.multiply(self.sci.data)
+            annulus_data_1d = annulus_data[mask.data > 0]
+            _, median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
+            bkg_median.append(median_sigclip)
+        bkg_median = np.array(bkg_median)
+        phot = aperture_photometry(self.sci.data, apertures)
+        phot['annulus_median'] = bkg_median
+        phot['aper_bkg'] = bkg_median * apertures.area
+        
+        
+        phot['aper_sum_bkgsub'] = phot['aperture_sum'] - phot['aper_bkg']
+        
+        self.stellar_phot_table = phot
+        
+        return
 
 
     def measure_zeropoint(self , save_suffix='GaiaCat'):
