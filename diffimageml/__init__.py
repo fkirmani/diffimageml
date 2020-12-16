@@ -4,8 +4,6 @@ from astropy.tests.helper import TestRunner
 
 from .fakeplanting import *
 from .util import *
-from .detect_sources import *
-from .build_ePSF import *
 from .plant_fakes import *
 from .test_diffimageml import *
 

@@ -20,10 +20,13 @@ from photutils.psf import EPSFModel, extract_stars
 from photutils import EPSFBuilder, BoundingBox
 from photutils import Background2D, MedianBackground
 from photutils import EllipticalAperture, detect_threshold, deblend_sources
+from photutils import CircularAperture , aperture_photometry , CircularAnnulus
 
 import itertools
 import copy
 import pickle
+
+from matplotlib import pyplot as plt
 
 
 # astropy Table format for the gaia source catalog
@@ -106,6 +109,7 @@ class FitsImage:
 
         self.sourcecatalog = None
         self.zeropoint = None
+        self.stellar_phot_table = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -460,23 +464,135 @@ class FitsImage:
         self.gaia_source_table = Table.read(
             catfilename, format=_GAIACATFORMAT_)
         return 0
+        
+    def do_stellar_photometry(self , gaia_catalog):
+        """Takes in a source catalog for stars in the image from Gaia. Will perform
+        aperture photometry on the sources listed in this catalog.
 
+        Parameters
+        ----------
 
-    def measure_zeropoint(self):
-        """Measure the zeropoint of the image, using a set of
-        known star locations and magnitudes, plus photutils aperture
-        photometry of those stars. """
-        # TODO : measure the zeropoint
+        gaia_catalog: Astropy Table : Contains information on Gaia sources in the image
+        
+        self.stellar_phot_table : Astropy Table : Table containing the measured magnitudes
+        for the stars in the image obtained from the Gaia catalog.
+        
+        """
+        
+        ##TODO: Add something to handle overstaturated sources
+        ##TODO: Improve aperture sizes
+        ##We currently just ignore anything brighter than m = 16 to avoid saturated sources
+        
+        positions = []
+        
+        for i in gaia_catalog:
+        
+            if i['mag'] < 16:
+                continue
+                
+            positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
+        
+        ##Set up the apertures
+        apertures = CircularAperture(positions, r= 10)
+        
+        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 20)
+        annulus_masks = annulus_aperture.to_mask(method='center')
+        
+        ##Background subtraction using sigma clipped stats.
+        ##Uses a median value from the annulus
+        bkg_median = []
+        for mask in annulus_masks:
+            annulus_data = mask.multiply(self.sci.data)
+            annulus_data_1d = annulus_data[mask.data > 0]
+            _ , median_sigclip, _ = sigma_clipped_stats(annulus_data_1d)
+            bkg_median.append(median_sigclip)
+            
+        ##Perform photometry and subtract out background
+        bkg_median = np.array(bkg_median)
+        phot = aperture_photometry(self.sci.data, apertures)
+        phot['annulus_median'] = bkg_median
+        phot['aper_bkg'] = bkg_median * apertures.area
+        
+        
+        phot['aper_sum_bkgsub'] = phot['aperture_sum'] - phot['aper_bkg']
+        
+        phot['mag'] = -2.5 * np.log10( phot['aper_sum_bkgsub'] )
+        
+        self.stellar_phot_table = phot
+        
         return
 
 
-    def extract_psf_stars(self, verbose=False):
+    def measure_zeropoint(self, showplot=False):
+        """Measure the zeropoint of the image, using a set of
+        known star locations and magnitudes, plus photutils aperture
+        photometry of those stars.
+
+        NOTE: currently using made-up data!!
+        """
+
+        # TODO : This is made-up data.
+        #  update this with the actual measured fluxes and magnitudes
+
+        # fix the zpt (for simulating data)
+        zpt = 25.0
+
+        # make some (perfect) flux and mag data
+        star_flux = np.random.uniform(0.01, 300.0, 100)
+        star_mag = -2.5 * np.log10(star_flux) + zpt
+
+        # define an uncertainty for each flux point
+        star_flux_err = np.sqrt(star_flux)
+
+        # define an error from the catalog, here fixed at 0.05 mag
+        star_mag_err = np.ones(100) * 0.05
+
+        # add some scatter to the 'measured' fluxes
+        star_flux += np.random.normal(0, star_flux_err, 100)
+
+        # --------------------------------------------------
+        # Below here is the only actual code needed for this function
+        # TODO: get star_mags and star_fluxes from the photometry tables
+
+        # mask non-positive flux measurements
+        #star_flux_ma = np.ma.masked_less_equal(star_flux, 0, copy=True)
+        ivalid = np.where(star_flux>0)
+        nvalid = len(ivalid)
+
+        # measure the zeropoint from each star
+        zpt_fit = star_mag[ivalid] + 2.5 * np.log10(star_flux[ivalid])
+        zpt_fit_err = np.sqrt(star_mag_err[ivalid]**2 +
+                              (1.086 * star_flux_err[ivalid]
+                               / star_flux[ivalid])**2 )
+
+        # adopt the weighted average of all zeropoints from all stars
+        # as the zeropoint for this image
+        self.zeropoint = np.average( zpt_fit, weights=1/zpt_fit_err**2)
+
+        if showplot:
+            ax = plt.gca()
+            plt.errorbar(star_mag, zpt_fit, zpt_fit_err, marker='.', ls=' ', color='k')
+            ax.axhline(self.zeropoint, color='teal')
+            plt.xlabel('Stellar Magnitude from Catalog')
+            plt.ylabel('Inferred Zero Point')
+            ax.text(0.05, 0.95,
+                    'Weighted mean zeropoint = {:.2f}'.format(self.zeropoint),
+                    ha='left', va='top', color='teal', transform=ax.transAxes)
+            plt.show()
+
+        return
+
+
+    def extract_psf_stars(self, SNthresh=100, verbose=False):
         """
         Extract postage-stamp image cutouts of stars from the image, for use
         in building an ePSF model
 
         Parameters
         ----------
+
+        SNthresh: float:  signal to noise threshold. Only stars with
+        S/N > SNthresh are used for PSF construction.
 
         verbose: bool : verbose output
         """
@@ -526,10 +642,11 @@ class FitsImage:
             print('{} stars, after removing intersections'.format(len(gaiacat)))
 
         # Limit to just stars with very good S/N
-        gaiacat_trimmed = gaiacat[gaiacat['signal_to_noise']>100]
+        gaiacat_trimmed = gaiacat[gaiacat['signal_to_noise']>SNthresh]
         if verbose:
-            print('restricting extractions to stars w/ S/N > 100' 
-                  'we have {} to consider'.format(len(gaiacat_trimmed)))
+            print('restricting extractions to stars w/ S/N > {}' 
+                  'we have {} to consider'.format(
+                SNthresh, len(gaiacat_trimmed)))
 
         # TODO? sort by the strongest signal/noise in r' filter
         # r.sort('phot_rp_mean_flux_over_error')
@@ -1002,17 +1119,31 @@ class FakePlanter:
                          'FK' in key and 'X' in key]
         fake_plant_x = [image_with_fakes.header[key] for key in fake_plant_x_keys]
         fake_plant_y = []
+        fakeIDs = []
         for key in fake_plant_x_keys:
             fake_id = key[2:2+len(str(_MAX_N_PLANTS_))]
+            fakeIDs.append(fake_id)
             fake_plant_y.append(image_with_fakes.header['FK%sY'%fake_id])
         fake_positions = np.array([fake_plant_x,fake_plant_y]).T
-        return fake_positions
+        return fakeIDs,fake_positions
+
+    def set_fake_detection_header(self,image_with_fakes,detection_table=None,outfilename=None):
+        if detection_table is None:
+            detection_table = self.detection_table
+
+        for row in detection_table:
+            image_with_fakes.header['FK%sDET'%row['fakeID']] = row['detected']
+        if isinstance(outfilename,str):
+            fits.writeto(outfilename,image_with_fakes,image_with_fakes.header,overwrite=True)
+        return image_with_fakes
+        
 
     @property
     def has_detection_efficiency(self):
         return self.detection_efficiency is not None
 
-    def calculate_detection_efficiency(self,image_with_fakes=None,fake_plant_locations=None,source_catalog=None,**kwargs):
+    def calculate_detection_efficiency(self,image_with_fakes=None,
+                fake_plant_locations=None,source_catalog=None,gridSize = 2,**kwargs):
         """
         Given a difference image with fake sources planted and a detected 
         source catalog, will calculate the detection efficiency.
@@ -1029,6 +1160,7 @@ class FakePlanter:
         Returns
         -------
         detection_efficiency : float
+        detection_table : `~astropy.table.Table` with ID,xy-locations,detected (1 or 0)
         """
         if image_with_fakes is None:
             image_with_fakes = self.diffim
@@ -1044,71 +1176,47 @@ class FakePlanter:
 
         if fake_plant_locations is None:
             if isinstance(image_with_fakes,FitsImage):
-                fake_plant_locations = self.get_fake_locations(image_with_fakes.sci)
+                fake_plant_ids,fake_plant_locations = self.get_fake_locations(image_with_fakes.sci)
             else:
-                fake_plant_locations = self.get_fake_locations(image_with_fakes)
+                fake_plant_ids,fake_plant_locations = self.get_fake_locations(image_with_fakes)
         # use locations and a search radius on detections and plant locations to get true positives
         tbl = source_catalog.to_table()
         tbl_x,tbl_y = [i.value for i in tbl['xcentroid']], [i.value for i in tbl['ycentroid']]
-        tbl_pixels = list(zip(tbl_x,tbl_y))
-        tbl.add_column(Column(tbl_pixels),name='pix') # adding this for easier use indexing tbl later
-        search = 5 # fwhm*n might be better criteria
+        tbl_pixels = list(zip(tbl_x,tbl_y))        
+        search = gridSize # fwhm*n might be better criteria
+
         truths = []
+        binary_detection_dict = {key:0 for key in fake_plant_ids}
         for pixel in tbl_pixels:
-            for i in fake_plant_locations:
+            for ind in range(len(fake_plant_locations)):
+                i = fake_plant_locations[ind]
                 if pixel[0] > i[0] - search  and pixel[0] < i[0] + search and pixel[1] > i[1] - search and pixel[1] < i[1] + search:
                     truths.append([tuple(i),pixel])
-                    #print(i,pixel)
+                    binary_detection_dict[fake_plant_ids[ind]] = 1
+                    break # TODO Think about multiple detections
                 else:
                     continue
-        #print('{} source detections within search radius criteria'.format(len(truths)))
-        # TODO: get the tbl_pixels which were outside the search radius criteria and return them as false positives
-        # break truths into the plant pixels and det src pixel lists; easier to work w
+
         plant_pixels = []
         det_src_pixels = []
         for i in truths:
             plant_pix = i[0]
             det_src_pix = i[1]
-            plant_pixels.append(plant_pix)
-            det_src_pixels.append(det_src_pix)
-        # the plant pixels which had multiple sources detected around it
-        repeat_plant = [item for item, count in collections.Counter(plant_pixels).items() if count > 1]
-        # the plant pixels which only had one source detected 
-        single_plant = [item for item, count in collections.Counter(plant_pixels).items() if count == 1]
-        N_plants_detected = len(single_plant) + len(repeat_plant)
-        # adding nearby_plantpix col to src table; using None if source wasnt within the search radius of plant
-        plant_col = []
-        for i in tbl:
-            tbl_x,tbl_y = i['xcentroid'].value,i['ycentroid'].value
-            if (tbl_x,tbl_y) in det_src_pixels:
-                idx = det_src_pixels.index((tbl_x,tbl_y))
-                plant_col.append(plant_pixels[idx])
-            else:
-                plant_col.append(None)
-        tbl.add_column(Column(plant_col),name='nearby_plantpix')
-        # index table to grab false source detections
-        false_tbl = tbl[tbl['nearby_plantpix']==None]
-        truth_tbl = tbl[tbl['nearby_plantpix']!=None]
-        single_truth_tbl,repeat_truth_tbl = [],[]
-        for i in truth_tbl:
-            if i['nearby_plantpix'] in repeat_plant:
-                repeat_truth_tbl.append(i)
-            else:
-                single_truth_tbl.append(i)
-        # should use a check on length rather than try/except below here
-        # try/excepting is to avoid error for empty lists
-        # mainly an issue on repeat truth tbl 
-        try:
-            single_truth_tbl = vstack(single_truth_tbl)
-        except:
-            pass
-        try:
-            repeat_truth_tbl = vstack(repeat_truth_tbl)
-        except:
-            pass            
-        #print('Final: {} planted SNe, {} clean single detections, {} as multi-sources near a plant, {} false detections'.format(Nfakes,len(single_truth_tbl),len(repeat_truth_tbl),len(false_tbl)))
-        #print('{} planted SNe had single clean source detected, {} planted SNe had multiple sources detected nearby, {} false detections'.format(len(single_plant),len(repeat_plant),len(false_tbl)))
+            if plant_pix not in plant_pixels:
+                plant_pixels.append(plant_pix)
+                det_src_pixels.append(det_src_pix)
+        
+        N_plants_detected = len(plant_pixels)
         efficiency = N_plants_detected/len(fake_plant_locations)
-        #print('Detection efficiency (N_plants_detected/N_plants) ~ {} on mag ~ {} SNe'.format(efficiency,magfakes))
+        binary_detection = [binary_detection_dict[fkID] for fkID in fake_plant_ids]
+        detection_table = Table([fake_plant_ids,fake_plant_locations[:,0],fake_plant_locations[:,1],binary_detection],
+                    names=['fakeID','pixX','pixY','detected'])
+        
+        if isinstance(image_with_fakes,FitsImage):
+            image_with_fakes = self.set_fake_detection_header(image_with_fakes = image_with_fakes.sci,detection_table = detection_table)
+        else:
+            image_with_fakes = self.set_fake_detection_header(image_with_fakes = image_with_fakes,detection_table = detection_table)
         self.detection_efficiency = efficiency
-        return self.detection_efficiency#,tbl,single_truth_tbl,repeat_truth_tbl,false_tbl
+        self.detection_table = detection_table
+        self.diffim = image_with_fakes
+        return self.detection_efficiency,self.detection_table
