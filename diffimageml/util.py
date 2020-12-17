@@ -42,7 +42,11 @@ def cut_hdu(self,location,size,writetodisk=False,saveas=None):
     if size is scalar gives a square dy=dx 
     updates hdr wcs keeps other info from original
     """
-    hdu = self.sci
+    try:
+        hdu = self.sci
+    except:
+        hdu = self
+
     cphdu = hdu.copy()
     dat = cphdu.data
     hdr = cphdu.header
@@ -55,6 +59,8 @@ def cut_hdu(self,location,size,writetodisk=False,saveas=None):
     
     if writetodisk:  
         cphdu.writeto(saveas,overwrite=True)
+
+    self.postage_stamp = cphdu
     
     return cphdu
 
@@ -158,9 +164,9 @@ def _extract_psf_fitting_names(psf):
 
     return xname, yname, fluxname
 
-def subtract_psf(self, psf, posflux, subshape=None,writetodisk=False,saveas="planted.fits"):
+def add_psf(self, psf, posflux, subshape=None,writetodisk=False,saveas="planted.fits"):
     """
-    Subtract PSF/PRFs from an image.
+    Add (or Subtract) PSF/PRFs from an image.
 
     Parameters
     ----------
