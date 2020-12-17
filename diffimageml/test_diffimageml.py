@@ -77,8 +77,8 @@ def test_photometry_of_stars():
 def test_measure_zeropoint():
     """Check measuring of zeropoint from known stars in the image"""
     fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
-    # TODO: must also get gaia sources, but that's a separate test, should
-    #  do them in series, and pass the object along?
+    fitsimageobject.fetch_gaia_sources(overwrite=False)
+    fitsimageobject.do_stellar_photometry(fitsimageobject.gaia_source_table)
     fitsimageobject.measure_zeropoint()
     assert(fitsimageobject.zeropoint is not None)
     return
