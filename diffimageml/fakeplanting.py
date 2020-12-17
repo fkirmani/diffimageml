@@ -1,4 +1,3 @@
-import util
 import numpy as np
 import scipy
 
@@ -32,6 +31,8 @@ import pickle
 
 from matplotlib import pyplot as plt, cm
 
+#local
+from .util import *
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
@@ -343,7 +344,7 @@ class FitsImage:
 
         # Set up contstants across the loop
         psf = psf.copy()
-        xname, yname, fluxname = util._extract_psf_fitting_names(psf)
+        xname, yname, fluxname = _extract_psf_fitting_names(psf)
         indices = np.indices(data.shape)
         subbeddata = data.copy()
         addeddata = data.copy()
@@ -1300,14 +1301,14 @@ class FakePlanter:
         searchplant = searchim.plants[0]
         templateplant = templateim.plants[0]
 
-        diff_ps = util.cut_hdu(diffim,location,size)
-        search_ps = util.cut_hdu(searchim,location,size)
-        template_ps = util.cut_hdu(templateim,location,size)
+        diff_ps = cut_hdu(diffim,location,size)
+        search_ps = cut_hdu(searchim,location,size)
+        template_ps = cut_hdu(templateim,location,size)
         clean_ps = [diff_ps,search_ps,template_ps]
 
-        diffplant_ps = util.cut_hdu(diffplant,location,size)
-        searchplant_ps = util.cut_hdu(searchplant,location,size)
-        templateplant_ps = util.cut_hdu(templateplant,location,size)
+        diffplant_ps = cut_hdu(diffplant,location,size)
+        searchplant_ps = cut_hdu(searchplant,location,size)
+        templateplant_ps = cut_hdu(templateplant,location,size)
         added_ps = [diffplant_ps,searchplant_ps,templateplant_ps]
 
         return [clean_ps,added_ps]
