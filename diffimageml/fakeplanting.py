@@ -247,21 +247,20 @@ class FitsImage:
         return self.sourcecatalog
     
 
-    def detect_host_galaxies(self , target_x , target_y , pixel_coords = True,**kwargs):
+    def detect_host_galaxies(self , ellipticity_cut = 0.35 , cut_cr = True ,**kwargs):
         """Detect sources  in the sky image using the astropy.photutils threshold-based
-         source detection algorithm to get data on the host galaxies.  
+         source detection algorithm to get data on the host galaxies. Will attempt to identify
+         the galaxies in the image
          '''
 
         Parameters
         ----------
 
-        target_x : float
-            Either the x pixel coordinate or the ra for the host galaxy
-        target_y : float
-            Either the y pixel coordinate or the dec for the host galaxy
-        pixel_coords: bool
-            If true, input coordinates are assumed to be pixel coords
-        Sky coordinates will be assumed to be in degrees if units are not provided
+        ellipticity_cut : float : We will select galaxies to be objects with an ellipticity
+        greater than ellipticity_cut.
+        
+        cur_cr : boolean : If true, performs an additional cut on the number of pixels in the source
+        in order to reduce the number of artifacts that get flagged as galaxies.
             
         Returns
         -------
@@ -269,30 +268,21 @@ class FitsImage:
         self.hostgalaxies : array : contains information on all host galaxies in the image
         """
         
-        if not pixel_coords:
-            ##Set units to degrees unless otherwise specified
-            if type(pixel_coords) != units.quantity.Quantity:
-                target_x *= units.deg
-                target_y *= units.deg
-            C = SkyCoord(target_x,target_y)
-            ##Convert to pixel coordinates
-            pix = self.skytopix(C)
-            target_x = pix[0]
-            target_y = pix[1]
-        ##TODO
-        
-        ##Add support to identify galaxies in the image
-        
+        xcol = []
+        ycol = []
+        source_propertiescol = []
         
         if not self.has_detections:
             self.detect_sources(**kwargs)
-        hostgalaxies = []
         for i in self.sourcecatalog:
-            x=i.xcentroid.value
-            y=i.ycentroid.value
-            if abs(x - target_x) < 10  and abs(y - target_y) < 10:
-                hostgalaxies.append(i)
-                break
+            if i.ellipticity > 0.35: ##Identifies Galaxies
+                if i.area.value < 8 and cut_cr: ##Removes cosmic rays
+                    continue
+                xcol.append(i.centroid[1])
+                ycol.append(i.centroid[0])
+                source_propertiescol.append(i)
+        hostgalaxies = Table([xcol , ycol , source_propertiescol] , names = ("x" , "y" , "Source Properties"))
+                
         
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
