@@ -166,19 +166,16 @@ def test_host_galaxy_detection(Image=None):
     ra = 17.3905276
     dec = 15.0091647
     ###Tests detect host galaxies with pixel coords
-    SkyImageClassInstance.detect_host_galaxies(pixel_x , pixel_y)
-    assert(len(SkyImageClassInstance.hostgalaxies) == 1)
-    host_x = SkyImageClassInstance.hostgalaxies[0].xcentroid.value
-    host_y = SkyImageClassInstance.hostgalaxies[0].ycentroid.value
-    assert( np.sqrt( (pixel_x - host_x) ** 2 + (pixel_y - host_y) ** 2 ) < 10)
-
-    ##Tests detect host galaxies with sky coords
-    SkyImageClassInstance.detect_host_galaxies(ra , dec , pixel_coords = False)
-    assert(len(SkyImageClassInstance.hostgalaxies) == 1)
-    host_x = SkyImageClassInstance.hostgalaxies[0].xcentroid.value
-    host_y = SkyImageClassInstance.hostgalaxies[0].ycentroid.value
-    assert( np.sqrt( (pixel_x - host_x) ** 2 + (pixel_y - host_y) ** 2 ) < 10)
-
+    SkyImageClassInstance.detect_host_galaxies()
+    assert(len(SkyImageClassInstance.hostgalaxies) >= 1)
+    
+    ##Make sure that target galaxy is flagged
+    target = False
+    for i in SkyImageClassInstance.hostgalaxies:
+        if np.sqrt( (i['x'].value - pixel_x) ** 2 + (i['y'].value - pixel_y) ** 2 ) < 10:
+            target = True
+    
+    assert(target)
 def test_diffimageml():
     if _GOFAST_:
         print("GO FAST!  SKIPPING SLOW TESTS")
