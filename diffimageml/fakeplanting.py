@@ -1,4 +1,6 @@
 import numpy as np
+import scipy
+
 import os, collections
 
 from astroquery.gaia import Gaia
@@ -8,7 +10,8 @@ from astropy.coordinates import SkyCoord
 from astropy.convolution import Gaussian2DKernel
 from astropy.io import ascii,fits
 from astropy.nddata import Cutout2D,NDData
-from astropy.stats import sigma_clipped_stats,gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm
+from astropy.stats import (sigma_clip, sigma_clipped_stats,
+                           gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm)
 from astropy.table import Table,Column,MaskedColumn,Row,vstack,setdiff,join
 from astropy.wcs import WCS, utils as wcsutils
 
@@ -35,6 +38,8 @@ _GAIACATEXT_ = 'ecsv'
 
 # Column names for the magnitudes and S/N to use for selecting viable PSF stars
 _GAIAMAGCOL_ =  'phot_rp_mean_mag'
+_GAIAFLUXCOL_ =  'phot_rp_mean_flux'
+_GAIAFLUXERRCOL_ =  'phot_rp_mean_flux_error'
 _GAIASNCOL_ = 'phot_rp_mean_flux_over_error'
 
 # astropy Table format for the fake SN source catalog
@@ -397,6 +402,12 @@ class FitsImage:
         magcol = MaskedColumn(data=full_gaia_source_table[_GAIAMAGCOL_],
                               name='mag')
 
+        # Compute a magnitude error (yes, its asymmetric. OK)
+        flux=full_gaia_source_table[_GAIAFLUXCOL_]
+        fluxerr=full_gaia_source_table[_GAIAFLUXERRCOL_]
+        magerr = 1.086 * fluxerr/flux
+        magerrcol = MaskedColumn(data=magerr, name='magerr')
+
         sncol = MaskedColumn(data=full_gaia_source_table[_GAIASNCOL_],
                               name='signal_to_noise')
 
@@ -413,7 +424,8 @@ class FitsImage:
         ycol = Column([pos[1] for pos in pixel_positions], name='y')
 
         # create a minimalist Table
-        self.gaia_source_table = Table([racol,deccol,xcol,ycol,magcol,sncol])
+        self.gaia_source_table = Table(
+            [racol, deccol, xcol, ycol, magcol, magerrcol, sncol])
 
         if verbose:
             print('There are {} stars available within fov '
@@ -547,7 +559,29 @@ class FitsImage:
 
 
     def plot_stellar_photometry(self):
-        """Plot the photometry results"""
+        """Simple plot of the stellar photometry results"""
+        # TODO: update to show a comparison of aperture vs psf photometry
+
+        try:
+            assert(self.stellar_phot_table is not None)
+        except:
+            print("Missing measured stellar photometry. "
+                  " Run do_stellar_photometry")
+            return -1
+
+        flux = self.stellar_phot_table['aper_sum_bkgsub']
+        fluxerr = np.sqrt(self.stellar_phot_table['aper_bkg'])
+        measured_mag = self.stellar_phot_table['mag']
+        xphot = self.stellar_phot_table['xcenter']
+        yphot = self.stellar_phot_table['ycenter']
+
+        plt.errorbar(measured_mag+25, flux, fluxerr, ls=' ', marker='o')
+        ax = plt.gca()
+        ax.invert_xaxis()
+        ax.set_yscale('log')
+        plt.ylabel('Measured flux [counts]')
+        plt.xlabel('Measured magnitude, assuming zpt=25')
+
         return
 
 
@@ -558,33 +592,42 @@ class FitsImage:
 
         NOTE: currently using made-up data!!
         """
+        try:
+            assert(self.stellar_phot_table is not None)
+        except:
+            print("Missing measured stellar photometry. "
+                  " Run do_stellar_photometry")
+            return -1
 
-        # TODO : This is made-up data.
-        #  update this with the actual measured fluxes and magnitudes
+        try:
+            assert(self.gaia_source_table is not None)
+        except:
+            print("Missing Gaia catalog photometry. "
+                  " Run fetch_gaia_sources")
+            return -1
 
-        # fix the zpt (for simulating data)
-        zpt = 25.0
+        star_flux = self.stellar_phot_table['aper_sum_bkgsub']
+        star_flux_err = np.sqrt(self.stellar_phot_table['aper_bkg'])
+        measured_mag = self.stellar_phot_table['mag']
 
-        # make some (perfect) flux and mag data
-        star_flux = np.random.uniform(0.01, 300.0, 100)
-        star_mag = -2.5 * np.log10(star_flux) + zpt
+        xphot = self.stellar_phot_table['xcenter']
+        yphot = self.stellar_phot_table['ycenter']
+        xcat = self.gaia_source_table['x']
+        ycat = self.gaia_source_table['y']
 
-        # define an uncertainty for each flux point
-        star_flux_err = np.sqrt(star_flux)
+        # Find the nearest Gaia catalog source for each measured star
+        icat = []
+        for i in range(len(xphot)):
+            dist = np.sqrt((xphot[i].value - xcat)**2 +
+                           (yphot[i].value - ycat)**2)
+            icat.append(dist.argmin())
+        star_mag = self.gaia_source_table['mag'][icat]
+        star_mag_err = self.gaia_source_table['magerr']
 
-        # define an error from the catalog, here fixed at 0.05 mag
-        star_mag_err = np.ones(100) * 0.05
-
-        # add some scatter to the 'measured' fluxes
-        star_flux += np.random.normal(0, star_flux_err, 100)
-
-        # --------------------------------------------------
-        # Below here is the only actual code needed for this function
-        # TODO: get star_mags and star_fluxes from the photometry tables
-
-        # mask non-positive flux measurements
+        # mask non-positive flux measurements and those with S/N<20
         #star_flux_ma = np.ma.masked_less_equal(star_flux, 0, copy=True)
-        ivalid = np.where(star_flux>0)
+        ivalid = np.where( (star_flux>0) &
+                           (np.abs(star_flux/star_flux_err)>20))
         nvalid = len(ivalid)
 
         # measure the zeropoint from each star
@@ -593,19 +636,48 @@ class FitsImage:
                               (1.086 * star_flux_err[ivalid]
                                / star_flux[ivalid])**2 )
 
-        # adopt the weighted average of all zeropoints from all stars
-        # as the zeropoint for this image
-        self.zeropoint = np.average( zpt_fit, weights=1/zpt_fit_err**2)
+        # A dizzying array of ways to compute the zeropoint for the image
+        zpt_mean_sc, zpt_median_sc, zpt_stdev_sc = sigma_clipped_stats(zpt_fit)
+        #zpt_weighted_mean = np.average( zpt_fit, weights=1/zpt_fit_err**2)
+        #zpt_fit_sigclipped = sigma_clip(zpt_fit, masked=True)
+        #zpt_fit_err_sigclipped = zpt_fit_err[~zpt_fit_sigclipped.mask]
+        #zpt_weighted_mean_sigclipped = np.average(
+        #    zpt_fit_sigclipped[~zpt_fit_sigclipped.mask],
+        #    weights=1/zpt_fit_err_sigclipped**2)
+
+        self.zeropoint = zpt_median_sc
 
         if showplot:
             ax = plt.gca()
-            plt.errorbar(star_mag, zpt_fit, zpt_fit_err, marker='.', ls=' ', color='k')
-            ax.axhline(self.zeropoint, color='teal')
+            plt.errorbar(star_mag[ivalid], zpt_fit, zpt_fit_err,
+                         marker='.', ls=' ', color='k',
+                         label='_nolabel_')
+            skiptheselines = """
+            ax.axhline(np.average(zpt_fit), color='darkorange',
+                       label='{:.2f} naive mean, unclipped'.format(
+                           np.average(zpt_fit)
+                       ))
+
+            ax.axhline(zpt_weighted_mean, color='red',
+                       label='{:.2f} inv-var-wgtd mean, unclipped'.format(
+                           zpt_weighted_mean
+                       ))
+            ax.axhline(zpt_mean_sc, color='teal',
+                       label='{:.2f} sigma-clipped mean'.format(
+                           zpt_mean_sc
+                       ))
+            ax.axhline(zpt_weighted_mean_sigclipped, color='blue',
+                       label='{:.2f} sigma-clipped weighted mean'.format(
+                           zpt_weighted_mean_sigclipped
+                       ))
+            """
+            ax.axhline(zpt_median_sc, color='g',
+                       label='{:.2f} sigma-clipped median'.format(
+                           zpt_median_sc
+                       ))
             plt.xlabel('Stellar Magnitude from Catalog')
             plt.ylabel('Inferred Zero Point')
-            ax.text(0.05, 0.95,
-                    'Weighted mean zeropoint = {:.2f}'.format(self.zeropoint),
-                    ha='left', va='top', color='teal', transform=ax.transAxes)
+            ax.legend(loc='best')
             plt.show()
 
         return
