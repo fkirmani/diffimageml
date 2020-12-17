@@ -1,3 +1,4 @@
+import util
 import numpy as np
 import os, collections
 
@@ -297,53 +298,125 @@ class FitsImage:
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
 
-    def get_lensed_locations(self,phis,ds):
+    
+    def add_psf(self, psf, posflux, subshape=None,writetodisk=False,saveas="planted.fits"):
         """
-        Simulate lensed SN positions on host-galaxy ellipse
+        Add (or Subtract) PSF/PRFs from an image.
 
         Parameters
         ----------
-        phis : List or array (must be 1D)
-            Supernova angles CCW from host semimajor axis. degs
-        ds : List or array (must be 1D)
-            Supernova distances from host center. pixels 
+        data : `~astropy.nddata.NDData` or array (must be 2D)
+            Image data.
+        psf : `astropy.modeling.Fittable2DModel` instance
+            PSF/PRF model to be substracted from the data.
+        posflux : Array-like of shape (3, N) or `~astropy.table.Table`
+            Positions and fluxes for the objects to subtract.  If an array,
+            it is interpreted as ``(x, y, flux)``  If a table, the columns
+            'x_fit', 'y_fit', and 'flux_fit' must be present.
+        subshape : length-2 or None
+            The shape of the region around the center of the location to
+            subtract the PSF from.  If None, subtract from the whole image.
+
         Returns
         -------
-        posflux : Array-like of shape (3, N) or `~astropy.table.Table`
-                Positions and fluxes for the objects to subtract.  If an array,
-                it is interpreted as ``(x, y, flux)``  If a table, the columns
-                'x_fit', 'y_fit', and 'flux_fit' must be present.
+        subdata : same shape and type as ``data``
+            The image with the PSF subtracted
         """
-        
-        hostgalaxies = self.templateim.hostgalaxies
-        hostgalaxy = hostgalaxies[0].to_table()
-        
-        x = hostgalaxy["xcentroid"][0].value # pix
-        y = hostgalaxy["ycentroid"][0].value # pix
-        location = (x,y)
-        
-        #xtheta ytheta defined analytically for segm image using variance then partial theta ~ 0 gives an ellipse 
-        a = hostgalaxy["semimajor_axis_sigma"][0].value # pix
-        b = hostgalaxy["semiminor_axis_sigma"][0].value # pix
-        orientation = hostgalaxy["orientation"][0].value # deg a-axis ccw from +x
-        
-        xs,ys,locs = [],[],[]
-        for i in range(len(phis)):
-            phi = phis[i]
-            d = ds[i]
-            xi = x+d*np.cos((orientation+phi)*np.pi/180)
-            yi = y+d*np.sin((orientation+phi)*np.pi/180)
-            xs.append(xi)
-            ys.append(yi)
-            locs.append((xi,yi))
-        
-        # put into table ready for entry as photutils subtract_psf posflux arg
-        flux = 10**4
-        fluxes = [flux for i in range(len(locs))]
-        posflux = Table(data=[xs,ys,fluxes],names=["x_fit","y_fit","flux_fit"],)
-        
-        return posflux
 
+        # copying so can leave original data untouched
+        hdu = self.sci
+        cphdu = hdu.copy()
+        data = cphdu.data
+        cphdr = cphdu.header
+
+        wcs,frame = WCS(cphdr),cphdr['RADESYS'].lower()
+
+        if data.ndim != 2:
+            raise ValueError(f'{data.ndim}-d array not supported. Only 2-d '
+                             'arrays can be passed to subtract_psf.')
+
+        #  translate array input into table
+        if hasattr(posflux, 'colnames'):
+            if 'x_fit' not in posflux.colnames:
+                raise ValueError('Input table does not have x_fit')
+            if 'y_fit' not in posflux.colnames:
+                raise ValueError('Input table does not have y_fit')
+            if 'flux_fit' not in posflux.colnames:
+                raise ValueError('Input table does not have flux_fit')
+        else:
+            posflux = Table(names=['x_fit', 'y_fit', 'flux_fit'], data=posflux)
+
+        # Set up contstants across the loop
+        psf = psf.copy()
+        xname, yname, fluxname = util._extract_psf_fitting_names(psf)
+        indices = np.indices(data.shape)
+        subbeddata = data.copy()
+        addeddata = data.copy()
+        
+        n = 0
+        if subshape is None:
+            indicies_reversed = indices[::-1]
+
+            for row in posflux:
+                getattr(psf, xname).value = row['x_fit']
+                getattr(psf, yname).value = row['y_fit']
+                getattr(psf, fluxname).value = row['flux_fit']
+
+                xp,yp,flux_fit = row['x_fit'],row['y_fit'],row['flux_fit']
+                sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
+                idx = str(n).zfill(3) 
+                cphdr['FK{}X'.format(idx)] = xp
+                cphdr['FK{}Y'.format(idx)] = yp
+                cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+                cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+                cphdr['FK{}F'.format(idx)] = flux_fit
+                # TO-DO, once have actual epsf classes will be clearer to fill the model
+                cphdr['FK{}MOD'.format(idx)] = "NA"
+                n += 1
+
+                subbeddata -= psf(*indicies_reversed)
+                addeddata += psf(*indicies_reversed)
+        else:
+            for row in posflux:
+                x_0, y_0 = row['x_fit'], row['y_fit']
+
+                # float dtype needed for fill_value=np.nan
+                y = extract_array(indices[0].astype(float), subshape, (y_0, x_0))
+                x = extract_array(indices[1].astype(float), subshape, (y_0, x_0))
+
+                getattr(psf, xname).value = x_0
+                getattr(psf, yname).value = y_0
+                getattr(psf, fluxname).value = row['flux_fit']
+
+                xp,yp,flux_fit = row['x_fit'],row['y_fit'],row['flux_fit']
+                sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
+                idx = str(n).zfill(3) 
+                cphdr['FK{}X'.format(idx)] = xp
+                cphdr['FK{}Y'.format(idx)] = yp
+                cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+                cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+                cphdr['FK{}F'.format(idx)] = flux_fit
+                # TO-DO, once have actual epsf classes will be clearer to fill the model
+                cphdr['FK{}MOD'.format(idx)] = "NA"
+                n += 1
+                
+                subbeddata = add_array(subbeddata, -psf(x, y), (y_0, x_0))
+                addeddata = add_array(addeddata, psf(x, y), (y_0, x_0))
+        
+        # the copied hdu written/returned should have data with the added psfs 
+        cphdu.data = addeddata
+        # inserting some new header values
+        cphdr['fakeSN']=True 
+        cphdr['N_fake']=str(len(posflux))
+        cphdr['F_epsf']=str(psf.flux)
+        
+        if writetodisk:
+            fits.writeto(saveas,cphdu.data,cphdr,overwrite=True)
+        
+        self.plants = [cphdu,posflux]
+        self.has_fakes = True # if makes it through this plant_fakes update has_fakes
+
+        return cphdu
     def fetch_gaia_sources(self, save_suffix='GaiaCat', overwrite=False,
                            verbose=False):
         """Using astroquery, download a list of sources from the Gaia
@@ -997,6 +1070,147 @@ class FakePlanter:
         # optional?: record pre-existing info about the image + measurements
         # of the ePSF model in the pipeline log file: FWHM, zeropoint
         return
+
+    def get_lensed_locations(self,phis,ds,fluxes=None):
+        """
+        Simulate lensed SN positions on host-galaxy ellipse
+
+        Parameters
+        ----------
+        phis : List or array (must be 1D)
+            Supernova angles CCW from host semimajor axis. degs
+        ds : List or array (must be 1D)
+            Supernova distances from host center. pixels
+        fluxes: Default None will generate list same length as positions of constant flux = 10**4
+            List or Array (must be 1D same length as positions) will set the fluxes 
+        Returns
+        -------
+        posflux : Array-like of shape (3, N) or `~astropy.table.Table`
+                Positions and fluxes for the objects to subtract.  If an array,
+                it is interpreted as ``(x, y, flux)``  If a table, the columns
+                'x_fit', 'y_fit', and 'flux_fit' must be present.
+        """
+        
+        # the host galaxy properties will be taken from the template which should have best detection
+        hostgalaxies = self.templateim.hostgalaxies
+        hostgalaxy = hostgalaxies[0].to_table()
+        
+        # the pixel location from the centroid of detection on template
+        x = hostgalaxy["xcentroid"][0].value # pix
+        y = hostgalaxy["ycentroid"][0].value # pix
+        location = (x,y)
+        
+        # the search/diff locations will use their corresponding pixel locations for this sky location
+        # needs to be included in the case that search or diff isn't sized the same as template
+        template_wcs = self.templateim.wcs
+        sky = wcsutils.pixel_to_skycoord(x,y,template_wcs)
+        search_wcs = self.searchim.wcs
+        diff_wcs = self.diffim.wcs
+        search_location = wcsutils.skycoord_to_pixel(sky,search_wcs) 
+        x_search,y_search = search_location
+        diff_location = wcsutils.skycoord_to_pixel(sky,diff_wcs)
+        x_diff, y_diff = diff_location
+
+        #xtheta ytheta defined analytically for segm image using variance then partial theta ~ 0 gives an ellipse 
+        a = hostgalaxy["semimajor_axis_sigma"][0].value # pix
+        b = hostgalaxy["semiminor_axis_sigma"][0].value # pix
+        orientation = hostgalaxy["orientation"][0].value # deg a-axis ccw from +x
+        
+        xs,ys,locs = [],[],[]
+        xs_search,ys_search,locs_search = [],[],[]
+        xs_diff,ys_diff,locs_diff = [],[],[]
+
+        for i in range(len(phis)):
+            phi = phis[i]
+            d = ds[i]
+            xi = x+d*np.cos((orientation+phi)*np.pi/180)
+            yi = y+d*np.sin((orientation+phi)*np.pi/180)
+            xs.append(xi)
+            ys.append(yi)
+            locs.append((xi,yi))
+            # now the search 
+            xi = x_search+d*np.cos((orientation+phi)*np.pi/180)
+            yi = y_search+d*np.sin((orientation+phi)*np.pi/180)
+            xs_search.append(xi)
+            ys_search.append(yi)
+            locs_search.append((xi,yi))
+            # now the diff
+            xi = x_diff+d*np.cos((orientation+phi)*np.pi/180)
+            yi = y_diff+d*np.sin((orientation+phi)*np.pi/180)
+            xs_diff.append(xi)
+            ys_diff.append(yi)
+            locs_diff.append((xi,yi))
+
+        
+        # if don't provide list of fluxes they will be set as constant flux        
+        if not fluxes:
+            flux = 10**4
+            fluxes = [flux for i in range(len(locs))]
+
+        # put into table ready for entry as photutils subtract_psf posflux arg
+        posflux = Table(data=[xs,ys,fluxes],names=["x_fit","y_fit","flux_fit"],)
+        posflux_search = Table(data=[xs_search,ys_search,fluxes],names=["x_fit","y_fit","flux_fit"])
+        posflux_diff = Table(data=[xs_diff,ys_diff,fluxes],names=["x_fit","y_fit","flux_fit"])
+        
+        self.templateim.lensed_locations = posflux
+        self.searchim.lensed_locations = posflux_search
+        self.diffim.lensed_locations = posflux_diff
+
+        return [posflux_diff,posflux_search,posflux]
+
+    def added_triplet(self,epsf,posfluxes):
+        """
+        Function for add_psf using epsf and posfluxes to the triplet of three FITS files that hold
+        A. a difference image
+        B. a 'search' image (typically a "new" single-epoch static sky image)
+        C. the template image (or 'reference')
+
+        The triplet remains unchanged, access to the planted for each available as self.im.plants
+        Returns list [self.diffim.plants,self.searchim.plants,self.templateim.plants] 
+        """
+
+        # TODO could also use self.im.lensed_locations
+        # posfluxes needs to be generalized more carefully
+        # posfluxes assuming list of posflux returned as diff,search,template 
+        diffplants = self.diffim.add_psf(epsf,posfluxes[0])
+        searchplants = self.searchim.add_psf(epsf,posfluxes[1])
+        templateplants = self.templateim.add_psf(epsf,posfluxes[2])
+
+
+        return [diffplants,searchplants,templateplants]
+
+    def postage_stamp_triplet(self,location,size):
+        """
+        Function for making postage stamps at given location and size for the triplet of three FITS files that hold
+        A. a difference image
+        B. a 'search' image (typically a "new" single-epoch static sky image)
+        C. the template image (or 'reference')
+
+        The triplet remains unchanged, access to the postage stamp for each pristine data available as self.im.postage_stamp
+        or for the added_psf triplet as self.im.plants.postage_stamp
+        Returns list [[self.diffim.plants,self.searchim.plants,self.templateim.plants],
+                    [diffim.plants.postage_stamp,searchim.plants.postage_stamp,templatim.plants.postage_stamp]] 
+        """
+        diffim = self.diffim
+        searchim = self.searchim
+        templateim = self.templateim
+
+        # [0] is the hdu with added data and updated header, [1] would be the posfluxes (available in the hdrs)
+        diffplant = diffim.plants[0]
+        searchplant = searchim.plants[0]
+        templateplant = templateim.plants[0]
+
+        diff_ps = util.cut_hdu(diffim,location,size)
+        search_ps = util.cut_hdu(searchim,location,size)
+        template_ps = util.cut_hdu(templateim,location,size)
+        clean_ps = [diff_ps,search_ps,template_ps]
+
+        diffplant_ps = util.cut_hdu(diffplant,location,size)
+        searchplant_ps = util.cut_hdu(searchplant,location,size)
+        templateplant_ps = util.cut_hdu(templateplant,location,size)
+        added_ps = [diffplant_ps,searchplant_ps,templateplant_ps]
+
+        return [clean_ps,added_ps]
 
     def has_fakes(self):
         """Check if fake stars have been planted in the image"""
