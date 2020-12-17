@@ -26,7 +26,7 @@ import itertools
 import copy
 import pickle
 
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, cm
 
 
 # astropy Table format for the gaia source catalog
@@ -454,7 +454,40 @@ class FitsImage:
         self.gaia_source_table = Table.read(
             catfilename, format=_GAIACATFORMAT_)
         return 0
-        
+
+
+    def plot_gaia_sources(self, magmin=12, magmax=18):
+        """Show the locations of Gaia sources on the image.
+        """
+        # get the x,y pixel locations of all the sources in the image
+        try:
+            assert(self.gaia_source_table is not None)
+        except assertionerror:
+            print("No Gaia source table. Run fetch_gaia_sources()")
+            return
+
+        medpixval = np.median(self.sci.data)
+        sigmapixval = np.std(self.sci.data)
+        plt.imshow(self.sci.data, cmap=cm.Greys, interpolation='nearest',
+                   aspect='equal', origin='lower', vmin=medpixval-sigmapixval,
+                   vmax=medpixval+sigmapixval)
+
+        mag = self.gaia_source_table['mag']
+        imaglim = np.where( (magmin<mag) & (mag<magmax))[0]
+        xsources = self.gaia_source_table['x'][imaglim]
+        ysources = self.gaia_source_table['y'][imaglim]
+        plt.plot(xsources, ysources, marker='o', ms=10, mfc='None',
+                 mec='cyan', ls=' ', alpha=0.5)
+        plt.title("Locations of Gaia Sources with {}<mag<{}".format(
+            magmin,magmax))
+
+        # TODO : plot diamonds over sources selected for PSF fitting
+
+        # TODO : show cut-outs of stars used for PSF fitting
+        return
+
+
+
     def do_stellar_photometry(self , gaia_catalog):
         """Takes in a source catalog for stars in the image from Gaia. Will perform
         aperture photometry on the sources listed in this catalog.
@@ -510,6 +543,11 @@ class FitsImage:
         
         self.stellar_phot_table = phot
         
+        return
+
+
+    def plot_stellar_photometry(self):
+        """Plot the photometry results"""
         return
 
 
