@@ -752,7 +752,6 @@ class FitsImage:
             plt.xlabel('Stellar Magnitude from Catalog')
             plt.ylabel('Inferred Zero Point')
             ax.legend(loc='best')
-            plt.show()
 
         return
 
@@ -895,7 +894,7 @@ class FitsImage:
         return
 
     def build_epsf_model(self, oversampling=2,
-                         verbose=False, save_suffix=None):
+                         verbose=False, save_suffix=None, overwrite=False):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
         non-linearity/saturation
@@ -912,11 +911,31 @@ class FitsImage:
             The suffix for the epsf model output filename.
             If set to None, then no output file is generated
 
-        """
-        # TODO: check for existence of gaia source table and fetch/read it if needed
-        #starcoordinates = fitsimage.gaia_source_table
+        overwrite: bool
+            If True, overwrite any existing ePSF model saved as a .pkl file
+            If False, and a .pkl exists with the name indicated by save_suffix,
+            just read that in without remaking the PSF model.
 
-        self.extract_psf_stars(verbose=verbose)
+        """
+        # check for existence of pre-made PSF model and load it if desired
+        rootfilename = os.path.splitext(
+            os.path.splitext(self.filename)[0])[0]
+        if save_suffix is not None and overwrite == False:
+            epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
+            if os.path.isfile(epsf_filename):
+                self.load_epsfmodel_from_pickle(save_suffix=save_suffix)
+                return
+
+
+        # check for existence of gaia source table and fetch/read it if needed
+        catfilename = rootfilename + '_' + save_suffix + '.' + _GAIACATEXT_
+        if os.path.isfile(catfilename):
+            try:
+                self.read_gaia_sources(save_suffix=save_suffix)
+            except:
+                print("Tried to read existing Gaia source table... failed.")
+        if self.psfstars is None:
+            self.extract_psf_stars(verbose=verbose)
         assert(self.psfstars is not None)
 
         # TODO: accommodate other header keywords to get the stats we need
@@ -973,6 +992,17 @@ class FitsImage:
         epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
         self.epsf = pickle.load(open( epsf_filename, "rb" ) )
         return
+
+
+    def plot_epsf_model(self):
+        try :
+            assert(self.epsf is not None)
+        except:
+            print("No ePSF model exists. Run build_epsf_model()")
+            return -1
+        plt.imshow(self.epsf.data, interpolation='Nearest', origin='lower')
+        plt.colorbar()
+
 
     def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
         
