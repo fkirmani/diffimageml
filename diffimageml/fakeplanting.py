@@ -539,7 +539,7 @@ class FitsImage:
 
 
 
-    def do_stellar_photometry(self , gaia_catalog):
+    def do_stellar_photometry(self , gaia_catalog = None):
         """Takes in a source catalog for stars in the image from Gaia. Will perform
         aperture photometry on the sources listed in this catalog.
 
@@ -547,7 +547,7 @@ class FitsImage:
         ----------
 
         gaia_catalog: Astropy Table : Contains information on Gaia sources in the image
-            You can also provide a catalog from detect_sources
+            You can also provide a catalog from detect_sources. If None, will use self.gaia_source_table
         
         self.stellar_phot_table : Astropy Table : Table containing the measured magnitudes
         for the stars in the image obtained from the Gaia catalog.
@@ -557,6 +557,14 @@ class FitsImage:
         ##TODO: Add something to handle overstaturated sources
         ##We currently just ignore anything brighter than m = 16 to avoid saturated sources
         
+        if not self.gaia_source_table and not gaia_catalog:
+            print ("Warning: No catalog provided for aperture photometry.")
+            print ("Run fetch_gaia_sources or providea source catalog")
+            return
+            
+        elif not gaia_catalog:
+            gaia_catalog = self.gaia_source_table
+            
         positions = []
         
         for i in gaia_catalog:
@@ -1452,9 +1460,76 @@ class FakePlanter:
                 
         self.plant_detections = Table([x , y , detect , magnitudes] , names = ('x','y','detect' , 'mag'))
 
+    def find_false_positives(self , clean_diff = None):
+        """
+        Runs aperture photometry on the false positives.
+
+        Parameters
+        ----------
+        clean_diff : If None, will use self.diffim. Otherwise should be a FitsImage object
+            containing a clean difference image corresponding to self.searchim
+            
         
-    def confusion_matrix(self,fp_detections=None , low_mag_lim = 0 , high_mag_lim = 25):
+        
+        Returns
+        -------
+        false_positives : Astropy Table : detected source catalog complete with photometry
+        
+        
+        """
+        
+        
+        if not clean_diff:
+            clean_diff = self.diffim
+            
+        
+        ##radius for matching sources across catalogs
+        pixscale = clean_diff.sci.header["PIXSCALE"]
+        FWHM = clean_diff.sci.header["L1FWHM"]
+        radius = FWHM / pixscale
+        
+        ##Find zeropoint (and other quantities) if necessary
+        if not self.searchim.gaia_source_table:
+            self.searchim.fetch_gaia_sources()
+        if not self.searchim.stellar_phot_table:
+            self.searchim.do_stellar_photometry(self.searchim.gaia_source_table)
+        if not self.searchim.zeropoint:
+            self.searchim.measure_zeropoint()
+            
+            
+        if not clean_diff.sourcecatalog:
+            clean_diff.detect_sources()
+            
+        if not clean_diff.stellar_phot_table:
+            clean_diff.do_stellar_photometry(clean_diff.sourcecatalog.to_table())
+            
+        x = []
+        y = []
+        mag = []
+        
+        for i in clean_diff.sourcecatalog.to_table():
+            xcenter = i["xcentroid"].value
+            ycenter = i["ycentroid"].value
+            x.append(xcenter)
+            y.append(ycenter)
+            found = False
+            for k in clean_diff.stellar_phot_table:
+                if np.sqrt( (xcenter - k['xcenter'].value) ** 2 + (ycenter - k['xcenter'].value ) ** 2 ) < radius:
+                    mag.append(k['mag'] + self.searchim.zeropoint)
+                    found = True
+                    break
+            if not found:
+                mag.append(999)
+        
+        return Table([x , y , mag ] , names = ('x' , 'y' , 'mag'))
+                
+        
+    def confusion_matrix(self,fp_detections=None , low_mag_lim = 0 , high_mag_lim = 25 , use_magnitudes = True):
         """Function for creating confusion matrix of detections vs plants
+        low_mag_lin : Will ignore sources with magnitudes less than this
+        high_mag_lim : Will ignore sources with magnitudes greater than this
+        use_mag : If True, produce confusion matrix with magnitude limits.
+            If false, do not use magnitude limits
         """
 
         #TO-DO decide what the confusion_matrix shoud look like
@@ -1468,7 +1543,6 @@ class FakePlanter:
             self.find_plant_detections()
         
         plants = self.plant_detections
-        print (plants)
         
         #fp_detections is the same type of catalog/file from plants detection but run using the clean diff
         #default None will run it here
@@ -1481,8 +1555,7 @@ class FakePlanter:
         
         
         for i in plants:
-            if i['mag'] < low_mag_lim or i['mag'] > high_mag_lim:
-                print ("Skip")
+            if use_magnitudes and i['mag'] < low_mag_lim or i['mag'] > high_mag_lim:
                 continue
             if i['detect'] == 1:
                 TP.append(i)
@@ -1502,7 +1575,22 @@ class FakePlanter:
         else:
             # TO-DO set the parameters in detect_sources using vals from run on the plant 
             # self.detection_vals = [nsigma,kfwhm,npixels,deblend,contrast]
-            FP = detect_sources(self.diffim.sci)
+            if not use_magnitudes:
+                FP = detect_sources(self.diffim.sci)
+            else:
+                
+                false_positives = find_false_positives()
+                FP = []
+                for i in false_positives:
+                    if false_positives['mag'] > high_mag_lim or false_positives['mag'] < high_mag_lim:
+                        continue
+                    FP.append(i)
+                    
+                if len(FP) != 0:
+                    FP = vstack(FP)
+                else:
+                    FP = []
+                    
         
         return [TP,FN,FP,TN]
     
