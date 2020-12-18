@@ -602,9 +602,14 @@ class FitsImage:
             positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
         
         ##Set up the apertures
-        apertures = CircularAperture(positions, r= 10)
         
-        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 20)
+        pixscale = image_with_fakes.sci.header["PIXSCALE"]
+        FWHM = image_with_fakes.sci.header["L1FWHM"]
+        
+        aperture_radius = 2 * FWHM / pixscale
+        apertures = CircularAperture(positions, r= aperture_radius)
+        
+        annulus_aperture = CircularAnnulus(positions, r_in = aperture_radius + 5 , r_out = aperture_radius + 10)
         annulus_masks = annulus_aperture.to_mask(method='center')
         
         ##Background subtraction using sigma clipped stats.
@@ -1391,7 +1396,52 @@ class FakePlanter:
         self.has_fakes = True # if makes it through this plant_fakes update has_fakes
 
         return cphdu
+        
+    def find_plant_detections(self , image_with_fakes = None):
+        
+        """
+        Builds catalog of succesfully detected fake sources
 
+        Parameters
+        ----------
+        image_with_fakes : A diff image with fakes planted. If None, will assume that it is self.diffim
+            In this case we will use detect sources with the default parameters
+        
+        Returns
+        -------
+        self.plant_detections : Astropy Table : Contains the x and y positions for each planted fake, and
+            the detect column will contain a 1 if the source is recovered succesfully and a 0 otherwise
+        """
+        
+        if image_with_fakes == None:
+            image_with_fakes = self.diffim
+            
+        if not image_with_fakes.has_detections:
+            image_with_fakes.detect_sources()
+        
+        fakeID , fakeposition = self.get_fake_locations(image_with_fakes.sci)
+        
+        pixscale = image_with_fakes.sci.header["PIXSCALE"]
+        FWHM = image_with_fakes.sci.header["L1FWHM"]
+        radius = FWHM / pixscale
+
+        detect = []
+        x = []
+        y = []
+        
+        for i in fakeposition:
+            x.append(i[0])
+            y.append(i[1])
+            d = 0
+            for k in image_with_fakes.sourcecatalog:
+                if np.sqrt( (k.centroid[1].value - i[0]) ** 2 + (k.centroid[0].value - i[1]) ** 2) < radius:
+                    d = 1
+                    break
+            detect.append(d)
+            
+        self.plant_detections = Table([x , y , detect] , names = ('x','y','detect'))
+
+        
     def confusion_matrix(self,fp_detections=None):
         """Function for creating confusion matrix of detections vs plants
         """
@@ -1402,6 +1452,10 @@ class FakePlanter:
         #plant_detections a yet to be defined property
         #will be something like a catalog/file with rows for each planted object 
         #plants have a col for detect ~ 1 is detection (TP), 0 is non-detection (FN)
+        
+        if self.plant_detections == None:
+            self.find_plant_detections()
+        
         plants = self.plant_detections
         
         #fp_detections is the same type of catalog/file from plants detection but run using the clean diff
