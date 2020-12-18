@@ -15,6 +15,11 @@ from photutils.datasets import make_gaussian_sources_image
 import itertools
 
 
+def get_example_data_dir():
+    example_data_dir = os.path.abspath(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),'test_data'))
+    return example_data_dir
+
 def pixtosky(self,pixel):
     """
     Given a pixel location returns the skycoord
