@@ -6,39 +6,72 @@ Fake Source Planting
 Demonstration of planting fake PSFs in diff images to mimic
 strongly-lensed supernovae.
 """
-		
-###############################################################
-# Explain here what this example does
+
 import os
 import diffimageml
+from matplotlib import pyplot as plt
 
-HIDE = """
+###############################################################
 
-_SEARCHIM1_ = '../../test_data/sky_image_1.fits.fz'
-assert(os.path.isfile(_SEARCHIM1_))
-searchim = diffimageml.FitsImage(_SEARCHIM1_)
-
-# ## Fetch a catalog of stars in the image from the Gaia db
-searchim.fetch_gaia_sources(overwrite=False)
-
-# ## Do Photometry of the Gaia Stars
-searchim.do_stellar_photometry(searchim.gaia_source_table)
-
-# show photometry of the gaia stars
-# searchim.plot_stellar_photometry()
-
-
-# ## Measure the zero point for this image from the Gaia stars
-searchim.measure_zeropoint(showplot=False)
+# %%
+# Fake Source Planting Overview
+# -------------------------------
+#
+# From a trio of images (template, search, diff), we
+#
+# #. find galaxies in the template image
+#
+# #. build a PSF model from the search image
+#
+# #. plant Fake PSFs in the diff image near the galaxy locations
 
 
-# ## Build an ePSF Model from the Gaia stars that are not saturated
+###############################################################
+# Setup 1: Get the Data
+# ---------------------
+# Load in a trio of fits images from the example data dir
+# Pull them together into a FakePlanter triplet
 
-# Find galaxies in the template image
+example_data_dict = diffimageml.get_example_data()
+assert(os.path.isfile(example_data_dict['diffim1']))
+assert(os.path.isfile(example_data_dict['searchim1']))
+assert(os.path.isfile(example_data_dict['templateim1']))
 
-# ## Plant the ePSF model as fake lensed SNe around galaxies in the images
-"""
+fakeplantertrio = diffimageml.FakePlanter(
+    example_data_dict['diffim1'],
+    searchim_fitsfilename=example_data_dict['searchim1'],
+    templateim_fitsfilename=example_data_dict['templateim1'])
 
 
+###############################################################
+# Setup 2: Make the PSF Model
+# ---------------------
+#
+# Measure the zero point and build the ePSF model from Gaia stars
+# See the other example for details and plots.
+# In practice, this code will load an existing ePSF model from the
+# example data directory.
+
+fakeplantertrio.searchim.fetch_gaia_sources(overwrite=False)
+fakeplantertrio.searchim.do_stellar_photometry(
+    fakeplantertrio.searchim.gaia_source_table)
+fakeplantertrio.searchim.measure_zeropoint(showplot=False)
+fakeplantertrio.searchim.build_epsf_model(verbose=False, save_suffix='TestEPSFModel')
+
+
+###############################################################
+# Plant Fakes
+# --------
+#
+# Here we plant just 10 very bright fakes
+
+
+
+
+###############################################################
+# Make a trio of postage stamps for each fake
+# --------
+#
+# Show the trio of fakes for each
 
 
