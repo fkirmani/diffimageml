@@ -8,10 +8,10 @@ Basic usage of the diffimageml package.
 		
 ###############################################################
 # Explain here what this example does
-   
+import os   
 import diffimageml
 
-_SEARCHIM1_ = '../test_data/sky_image_1.fits.fz'
+_SEARCHIM1_ = '../../diffimageml/test_data/sky_image_1.fits.fz'
 assert(os.path.isfile(_SEARCHIM1_))
 searchim = diffimageml.FitsImage(_SEARCHIM1_)
 

@@ -53,42 +53,6 @@ _FSNCATEXT_ = 'ecsv'
 _PSFSTARCUTOUTSIZE_ = 25 # pixels
 _MAX_N_PLANTS_ = 999
 
-class FakePlanterEPSFModel():
-    """ A class for holding an effective PSF model.
-
-    """
-    def __init__(self):
-        """
-
-        """
-        # TODO: zeropoint is measured in the FitsImage class
-        #  maybe we should require it exists, then inherit the value here?
-        self.zeropoint = 0
-        self.epsf = None
-        self.fitted_stars = None
-        return
-
-    def scaled_to_mag(self, mag):
-        """Return a data array scaled to the given magnitude.
-        Requires that a zeropoint has been set.
-        """
-        # TODO : add a check that zeropoint has been set by user
-        return self.epsf.data * 10**(-0.4*(mag-self.zeropoint))
-
-
-    def showepsfmodel(self):
-        """ TODO: visualize the ePSF model"""
-        norm = simple_norm(self.epsf.data, 'log', percent=99.)
-        plt.imshow(self.epsf.data, norm=norm, origin='lower', cmap='viridis')
-        plt.colorbar()
-        return
-
-    def writetofits(self):
-        """TODO: write to a fits file"""
-        #fits.writeto(name,epsf.data,hdr,overwrite=True)
-        #         fits.writeto(plantname,image.data,hdr,overwrite=True)
-        return
-
 
 class FitsImage:
     """A class to hold a single FITS image and associated products
@@ -760,7 +724,6 @@ class FitsImage:
             plt.xlabel('Stellar Magnitude from Catalog')
             plt.ylabel('Inferred Zero Point')
             ax.legend(loc='best')
-            plt.show()
 
         return
 
@@ -903,7 +866,7 @@ class FitsImage:
         return
 
     def build_epsf_model(self, oversampling=2,
-                         verbose=False, save_suffix=None):
+                         verbose=False, save_suffix=None, overwrite=False):
         """Build an effective PSF model from a set of stars in the image
         Uses a list of star locations (from Gaia)  which are below
         non-linearity/saturation
@@ -920,11 +883,31 @@ class FitsImage:
             The suffix for the epsf model output filename.
             If set to None, then no output file is generated
 
-        """
-        # TODO: check for existence of gaia source table and fetch/read it if needed
-        #starcoordinates = fitsimage.gaia_source_table
+        overwrite: bool
+            If True, overwrite any existing ePSF model saved as a .pkl file
+            If False, and a .pkl exists with the name indicated by save_suffix,
+            just read that in without remaking the PSF model.
 
-        self.extract_psf_stars(verbose=verbose)
+        """
+        # check for existence of pre-made PSF model and load it if desired
+        rootfilename = os.path.splitext(
+            os.path.splitext(self.filename)[0])[0]
+        if save_suffix is not None and overwrite == False:
+            epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
+            if os.path.isfile(epsf_filename):
+                self.load_epsfmodel_from_pickle(save_suffix=save_suffix)
+                return
+
+
+        # check for existence of gaia source table and fetch/read it if needed
+        catfilename = rootfilename + '_' + save_suffix + '.' + _GAIACATEXT_
+        if os.path.isfile(catfilename):
+            try:
+                self.read_gaia_sources(save_suffix=save_suffix)
+            except:
+                print("Tried to read existing Gaia source table... failed.")
+        if self.psfstars is None:
+            self.extract_psf_stars(verbose=verbose)
         assert(self.psfstars is not None)
 
         # TODO: accommodate other header keywords to get the stats we need
@@ -981,6 +964,17 @@ class FitsImage:
         epsf_filename = rootfilename + '_' + save_suffix + '.pkl'
         self.epsf = pickle.load(open( epsf_filename, "rb" ) )
         return
+
+
+    def plot_epsf_model(self):
+        try :
+            assert(self.epsf is not None)
+        except:
+            print("No ePSF model exists. Run build_epsf_model()")
+            return -1
+        plt.imshow(self.epsf.data, interpolation='Nearest', origin='lower')
+        plt.colorbar()
+
 
     def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
         
@@ -1154,6 +1148,7 @@ class FakePlanter:
         self.detection_efficiency = None
         return
 
+
     @property
     def has_epsfmodel(self):
         """True if both the diffim and searchim have an ePSF model.
@@ -1161,24 +1156,10 @@ class FakePlanter:
         """
         if ( self.diffim.psfmodel is not None and
             self.searchim.psfmodel is not None ):
-            return ( type(self.diffim.psfmodel) == FakePlanterEPSFModel and
-                     type(self.searchim.psfmodel) == FakePlanterEPSFModel)
+            return ( type(self.diffim.psfmodel) == EPSFModel and
+                     type(self.searchim.psfmodel) == EPSFModel)
         return False
 
-    def build_epsf_model(self):
-        """Function for constructing an effective point spread function model
-        from the stars in the static sky image.
-        """
-        # TODO : absorb build_ePSF.py module to here
-        # identify stars in the static sky image by making a query to
-        # the online Gaia database
-
-        # build an ePSF model from those stars, add it as an extension to
-        # the input fits image (optionally save the modified fits image to disk)
-
-        # optional?: record pre-existing info about the image + measurements
-        # of the ePSF model in the pipeline log file: FWHM, zeropoint
-        return
 
     def get_lensed_locations(self,phis,ds,fluxes=None):
         """
@@ -1285,8 +1266,8 @@ class FakePlanter:
         searchplants = self.searchim.add_psf(epsf,posfluxes[1])
         templateplants = self.templateim.add_psf(epsf,posfluxes[2])
 
-
         return [diffplants,searchplants,templateplants]
+
 
     def postage_stamp_triplet(self,location,size):
         """
@@ -1304,7 +1285,8 @@ class FakePlanter:
         searchim = self.searchim
         templateim = self.templateim
 
-        # [0] is the hdu with added data and updated header, [1] would be the posfluxes (available in the hdrs)
+        # [0] is the hdu with added data and updated header,
+        # [1] would be the posfluxes (available in the hdrs)
         diffplant = diffim.plants[0]
         searchplant = searchim.plants[0]
         templateplant = templateim.plants[0]

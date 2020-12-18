@@ -76,8 +76,8 @@ class TestPlanter(unittest.TestCase):
 class TestFitsImage(unittest.TestCase):
     def setUp(self):
         self.FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
-        if not _GOFAST_:
-            self.FitsImageClassInstance.fetch_gaia_sources(save_suffix='TestGaiaCat')
+        # OK to run this even in _GOFAST_ mode b/c it will load a pre-baked cat
+        self.FitsImageClassInstance.fetch_gaia_sources(save_suffix='TestGaiaCat')
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_fetch_gaia_sources`")
     def test_fetch_gaia_sources(self):
@@ -110,8 +110,8 @@ class TestFitsImage(unittest.TestCase):
 
     def test_measure_zeropoint(self):
         """Check measuring of zeropoint from known stars in the image"""
-        # TODO: must also get gaia sources, but that's a separate test, should
-        #  do them in series, and pass the object along?
+        self.FitsImageClassInstance.do_stellar_photometry(
+            self.FitsImageClassInstance.gaia_source_table)
         self.FitsImageClassInstance.measure_zeropoint()
         self.assertTrue(self.FitsImageClassInstance.zeropoint is not None)
         
