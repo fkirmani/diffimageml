@@ -10,28 +10,9 @@ import os
 import diffimageml
 from matplotlib import pyplot as plt
 
-
-# Hard coding the test data filenames
-_EXAMPLEDATADIR_ = diffimageml.get_example_data_dir()
-
-_DIFFIM1_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'diff_pydia_1.fits.fz'))
-_FAKEDIFFIM1_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'diff_pydia_1_fakegrid.fits'))
-_SEARCHIM1_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'sky_image_1.fits.fz'))
-_TEMPLATEIM1_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'template_1.fits.fz'))
-
-_DIFFIM2_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'diff_pydia_2.fits.fz'))
-_FAKEDIFFIM2_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'diff_pydia_2_fakegrid.fits'))
-_SEARCHIM2_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'sky_image_2.fits.fz'))
-_TEMPLATEIM2_ = os.path.abspath(os.path.join(
-    _EXAMPLEDATADIR_, 'template_2.fits.fz'))
-
+# Get a dict with test data filenames
+example_data_dict = diffimageml.get_example_data()
+searchim1 = example_data_dict['searchim1']
 
 ###############################################################
 
@@ -51,8 +32,8 @@ _TEMPLATEIM2_ = os.path.abspath(os.path.join(
 #
 # * Build an ePSF model from the Gaia stars
 
-assert(os.path.isfile(_SEARCHIM1_))
-searchim = diffimageml.FitsImage(_SEARCHIM1_)
+assert(os.path.isfile(searchim1))
+searchim = diffimageml.FitsImage(searchim1)
 
 ###############################################################
 # Fetch a catalog of stars in the image from the Gaia db

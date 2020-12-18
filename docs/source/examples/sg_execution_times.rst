@@ -5,10 +5,10 @@
 
 Computation times
 =================
-**00:04.270** total execution time for **examples** files:
+**00:03.438** total execution time for **examples** files:
 
 +--------------------------------------------------------------------------+-----------+--------+
-| :ref:`sphx_glr_examples_plot_epsfmodel.py` (``plot_epsfmodel.py``)       | 00:04.270 | 0.0 MB |
+| :ref:`sphx_glr_examples_plot_epsfmodel.py` (``plot_epsfmodel.py``)       | 00:03.438 | 0.0 MB |
 +--------------------------------------------------------------------------+-----------+--------+
 | :ref:`sphx_glr_examples_plot_fakeplanting.py` (``plot_fakeplanting.py``) | 00:00.000 | 0.0 MB |
 +--------------------------------------------------------------------------+-----------+--------+
