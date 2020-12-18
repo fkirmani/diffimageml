@@ -9,11 +9,11 @@ Summary
 *******
 
 .. autosummary::
-	diffimageml.fakesnplanter.FakePlanterEPSFModel
-	diffimageml.fakesnplanter.FitsImage
-	diffimageml.fakesnplanter.FakePlanter
+	diffimageml.fakeplanting.FakePlanterEPSFModel
+	diffimageml.fakeplanting.FitsImage
+	diffimageml.fakeplanting.FakePlanter
 
 |
 
-.. automodule:: diffimageml.fakesnplanter
+.. automodule:: diffimageml.fakeplanting
    :members:
