@@ -72,6 +72,13 @@ class TestPlanter(unittest.TestCase):
         epsfflux = int(post_im.header['N_fake'])*float(post_im.header['F_epsf'])
         self.assertTrue(np.abs(fitsflux-epsfflux)/epsfflux < accuracy)
 
+    def test_lens_parameter_generation(self):
+        phi,d = self.fakeplanterobject.generate_lens_parameters(NImage=4)
+        self.assertTrue(len(phi)==4 and len(d)==4)
+        phi,d = self.fakeplanterobject.generate_lens_parameters(d_func=lambda x: np.random.normal(loc=5,scale=.1,size=x),
+                                phi_func=lambda x: np.random.normal(loc=5,scale=.1,size=x), NImage=4)
+        self.assertTrue(len(phi)==4 and len(d)==4)
+
 
 class TestFitsImage(unittest.TestCase):
     def setUp(self):
@@ -171,7 +178,7 @@ def test_loader(loader):
 if __name__ == '__main__':
     #TEST LIST
     #test_cases = 'ALL'
-    test_cases = [TestDataExistence,TestFitsImage]
+    test_cases = [TestPlanter]
 
     if test_cases == 'ALL':
         unittest.main()
