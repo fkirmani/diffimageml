@@ -117,6 +117,7 @@ class FitsImage:
         self.sourcecatalog = None
         self.zeropoint = None
         self.stellar_phot_table = None
+        self.gaia_source_table = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -582,6 +583,7 @@ class FitsImage:
         ----------
 
         gaia_catalog: Astropy Table : Contains information on Gaia sources in the image
+            You can also provide a catalog from detect_sources
         
         self.stellar_phot_table : Astropy Table : Table containing the measured magnitudes
         for the stars in the image obtained from the Gaia catalog.
@@ -589,22 +591,23 @@ class FitsImage:
         """
         
         ##TODO: Add something to handle overstaturated sources
-        ##TODO: Improve aperture sizes
         ##We currently just ignore anything brighter than m = 16 to avoid saturated sources
         
         positions = []
         
         for i in gaia_catalog:
-        
-            if i['mag'] < 16:
+            
+            if 'mag' in gaia_catalog.colnames and i['mag'] < 16:
                 continue
-                
-            positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
+            if 'x' in gaia_catalog.colnames:
+                positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
+            else:
+                positions.append((i['xcentroid'].value , i['ycentroid'].value))
         
         ##Set up the apertures
         
-        pixscale = image_with_fakes.sci.header["PIXSCALE"]
-        FWHM = image_with_fakes.sci.header["L1FWHM"]
+        pixscale = self.sci.header["PIXSCALE"]
+        FWHM = self.sci.header["L1FWHM"]
         
         aperture_radius = 2 * FWHM / pixscale
         apertures = CircularAperture(positions, r= aperture_radius)
@@ -1428,6 +1431,7 @@ class FakePlanter:
         detect = []
         x = []
         y = []
+        magnitudes = []
         
         for i in fakeposition:
             x.append(i[0])
@@ -1438,11 +1442,36 @@ class FakePlanter:
                     d = 1
                     break
             detect.append(d)
+        
+        if not image_with_fakes.stellar_phot_table:
+            image_with_fakes.do_stellar_photometry(image_with_fakes.sourcecatalog.to_table())
+        if not self.searchim.gaia_source_table:
+            self.searchim.fetch_gaia_sources()
+        if not self.searchim.stellar_phot_table:
+            self.searchim.do_stellar_photometry(self.searchim.gaia_source_table)
+        if not self.searchim.zeropoint:
+            self.searchim.measure_zeropoint()
+        
+        for i in range(len(x)):
+            xposition = x[i]
+            yposition = y[i]
             
-        self.plant_detections = Table([x , y , detect] , names = ('x','y','detect'))
+            found = False
+            for k in image_with_fakes.stellar_phot_table:
+                
+                if np.sqrt( (k['xcenter'].value - xposition) ** 2 + (k['ycenter'].value - yposition) ** 2) < radius:
+                    if np.isnan(k['mag']):
+                        magnitudes.append(k['mag'])
+                    magnitudes.append(k['mag'] + self.searchim.zeropoint)
+                    found = True
+                    break
+            if not found:
+                magnitudes.append(999)
+                
+        self.plant_detections = Table([x , y , detect , magnitudes] , names = ('x','y','detect' , 'mag'))
 
         
-    def confusion_matrix(self,fp_detections=None):
+    def confusion_matrix(self,fp_detections=None , low_mag_lim = 0 , high_mag_lim = 25):
         """Function for creating confusion matrix of detections vs plants
         """
 
@@ -1457,6 +1486,7 @@ class FakePlanter:
             self.find_plant_detections()
         
         plants = self.plant_detections
+        print (plants)
         
         #fp_detections is the same type of catalog/file from plants detection but run using the clean diff
         #default None will run it here
@@ -1466,13 +1496,24 @@ class FakePlanter:
         FN = [] # not detected plant
         FP = [] # detected, but not a plant, (all the detections on clean diffim)
         TN = None # not detected not a plant, (no meaning)
+        
+        
         for i in plants:
+            if i['mag'] < low_mag_lim or i['mag'] > high_mag_lim:
+                print ("Skip")
+                continue
             if i['detect'] == 1:
                 TP.append(i)
             elif i['detect'] == 0:
                 FN.append(i)
-        TP = vstack(TP)
-        FN = vstack(FN)
+                
+        if len(TP) != 0:
+            TP = vstack(TP)
+        else:
+            TP = []
+        if len(FN) != 0:
+            FN = vstack(FN)
+        FN = []
         
         if fp_detections:
             FP = fp_detections
