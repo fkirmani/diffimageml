@@ -30,6 +30,7 @@ import copy
 import pickle
 
 from matplotlib import pyplot as plt, cm
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 #local
 from .util import *
@@ -1429,6 +1430,64 @@ class FakePlanter:
         return [diffplants,searchplants,templateplants]
 
 
+    def plot_fakes(self, fake_indices, cutoutsize=50):
+        """
+        Show small cutouts of the fakes planted in the diffim and searchim
+
+        Parameters
+        ----------
+        fake_indices : List-like
+            indices for the fake sources, corresponding to the 'FKnnnX' and
+            'FKnnnY' cards (and associated) that were written into the header
+            of the 'sci' image for the diffim and/or searchim FitsImage objects
+
+        cutoutsize : int
+            number of pixels on a side for the image to be shown. We cut it in
+            half and use the integer component, so if an odd number or float is
+            provided it is rounded down to the preceding integer.
+        """
+        halfwidth = int(cutoutsize/2)
+
+        # set up a grid of axes with the appropriate size
+        nfakes = len(fake_indices)
+        gridsize1 = np.int(np.sqrt(nfakes))
+        gridsize2 = int(nfakes / gridsize1)
+        if gridsize1*gridsize2 < nfakes:
+            gridsize2 += 1
+
+        fig = plt.figure(1, (3.*gridsize2, 3.*gridsize1))
+        grid = ImageGrid(fig, 111, nrows_ncols=(gridsize1, gridsize2),
+                         axes_pad=0.1,
+                         )
+        for i, idx in zip(range(nfakes), fake_indices):
+            # get the fake x,y location and flux
+            x = self.diffim.sci.header[ f'FK{idx:03d}X' ]
+            y = self.diffim.sci.header[ f'FK{idx:03d}Y' ]
+            flux = self.diffim.sci.header[ f'FK{idx:03d}F' ]
+
+            # grab some pixels for the fake source
+            cutout = self.diffim.sci.data[
+                     int(y)-halfwidth:int(y)+halfwidth,
+                     int(x)-halfwidth:int(x)+halfwidth]
+
+            # set the vmin,vmax for scaling
+            vmax = np.min( [np.std(cutout) * 5, np.max(cutout)] )
+            vmin = np.max( [np.median(cutout) - np.std(cutout) * 3,
+                            np.min(cutout)] )
+
+            # show us the pixels!
+            ax = grid[i]
+            ax.imshow( cutout, vmin=vmin, vmax=vmax, cmap=cm.Greys,
+                       interpolation='nearest', origin='lower',
+                       aspect='equal')
+
+            # label it with the x,y,flux values
+            ax.text(0.05, 0.95, f'{x:.1f}, {y:.1f}, {flux:.1e}',
+                    ha='left', va='top', color='r', transform=ax.transAxes)
+
+        return
+
+
     def make_postage_stamp_triplets(self, location, size):
         """
         Function for making postage stamps at given location and size for the triplet of three FITS files that hold
@@ -1695,10 +1754,10 @@ class FakePlanter:
         fake_plant_y = []
         fakeIDs = []
         for key in fake_plant_x_keys:
-            fake_id = key[2:2+len(str(_MAX_N_PLANTS_))]
-            fakeIDs.append(fake_id)
-            fake_plant_x.append(image_with_fakes.sci.header['FK%sX'%fake_id])
-            fake_plant_y.append(image_with_fakes.sci.header['FK%sY'%fake_id])
+            fake_id_str = key[2:2+len(str(_MAX_N_PLANTS_))]
+            fakeIDs.append(int(fake_id_str))
+            fake_plant_x.append(image_with_fakes.sci.header['FK%sX'%fake_id_str])
+            fake_plant_y.append(image_with_fakes.sci.header['FK%sY'%fake_id_str])
         fake_positions = np.array([fake_plant_x,fake_plant_y]).T
         return fakeIDs, fake_positions
 

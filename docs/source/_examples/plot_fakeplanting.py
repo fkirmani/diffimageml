@@ -117,16 +117,17 @@ print(fakeids_to_show)
 
 
 ###############################################################
-# TODO:  Show us the fakes!!
+# Display the fakes in the diff image
 # --------
 #
 
-# fakeplantertrio.plot_fakes(fake_indices=fakeids_to_show)
+fakeplantertrio.plot_fakes(
+    fake_indices=fakeids_to_show)
 
 
 
 ###############################################################
-# Make a trio of postage stamps for each fake
+# TODO:  Make a trio of postage stamps for each fake
 # --------
 #
 # Show the trio of fakes for each
