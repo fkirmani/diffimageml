@@ -64,7 +64,9 @@ fakeplantertrio.searchim.build_epsf_model(verbose=False, save_suffix='TestEPSFMo
 # --------
 #
 # Here we plant just 10 very bright fakes
-
+epsfmodel = fakeplantertrio.searchim.epsf
+hostgalcat = fakeplantertrio.templateim.detect_host_galaxies()
+fakeplantertrio.plant_fakes_in_diffim(epsfmodel, posfluxtable=fakeloc)
 
 
 

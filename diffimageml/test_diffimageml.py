@@ -64,7 +64,7 @@ class TestPlanter(unittest.TestCase):
 
         # TODO: this is gonna need debugging
         pre_imdata = self.fakeplanterobject.diffim.sci.data
-        post_im = self.fakeplanterobject.plant_fakes(epsf,pixels)
+        post_im = self.fakeplanterobject.plant_fakes_in_diffim(epsf, pixels)
         post_imdata = post_im.data
 
         fitsflux = np.sum(post_imdata - pre_imdata)

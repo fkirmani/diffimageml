@@ -14,7 +14,6 @@ from photutils.datasets import make_gaussian_sources_image
 
 import itertools
 
-
 def get_example_data():
     """Returns a dict with the filepath for each of the input images used
     as example data"""
