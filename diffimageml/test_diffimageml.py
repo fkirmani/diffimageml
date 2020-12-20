@@ -27,7 +27,7 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
     _SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_GOFAST_ = True # Use this to skip slow tests
+_GOFAST_ = False # Use this to skip slow tests
 
 class TestDataExistence(unittest.TestCase):
     """
@@ -82,7 +82,8 @@ class TestFitsImage(unittest.TestCase):
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_fetch_gaia_sources`")
     def test_fetch_gaia_sources(self):
         """ Check that an astroquery call to the Gaia db works"""
-        self.assertEqual(type(self.FitsImageClassInstance.gaia_source_table) == Table)
+        self.assertEqual(type(self.FitsImageClassInstance.gaia_source_table),
+                         Table)
         self.assertTrue(len(self.FitsImageClassInstance.gaia_source_table) > 0)
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_photometry_of_stars`")
@@ -104,7 +105,8 @@ class TestFitsImage(unittest.TestCase):
         self.assertTrue(self.FitsImageClassInstance.epsf.data.sum()>0)
 
         # read in the ePSF model we just created
-        self.FitsImageClassInstance.read_epsf_model(save_suffix='TestEPSFModel')
+        self.FitsImageClassInstance.load_epsfmodel_from_pickle(
+            save_suffix='TestEPSFModel')
         self.assertTrue(self.FitsImageClassInstance.epsf is not None)
         self.assertTrue(self.FitsImageClassInstance.epsf.data.sum()>0)
 
@@ -117,6 +119,7 @@ class TestFitsImage(unittest.TestCase):
         
     def tearDown(self):
         self.FitsImageClassInstance.hdulist.close()
+
 
 class TestSourceDetection(unittest.TestCase):
     def setUp(self):
