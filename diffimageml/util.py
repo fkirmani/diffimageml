@@ -117,10 +117,8 @@ def get_lattice_positions(self):
 
 def lco_epsf(self):
     """
-    Another ePSF option besides building just use circular gaussian from lco
-    header on the static sky search im.  At some point may want to have a
-    class like telescope_psf where we can store pre-defined (i.e. not built)
-    ePSF models
+    Another ePSF option besides building just use circular gaussian from lco header on the static sky search im
+    At some point may want to have a class like telescope_psf where we can store pre-defined (i.e. not built) epsf
     """
     
     hdu = self.searchim.sci
@@ -161,6 +159,157 @@ def lco_epsf(self):
 
     return epsf
 
+def extract_psf_fitting_names(psf):
+    """
+    Determine the names of the x coordinate, y coordinate, and flux from
+    a model.  Returns (xname, yname, fluxname)
+    """
+
+    if hasattr(psf, 'xname'):
+        xname = psf.xname
+    elif 'x_0' in psf.param_names:
+        xname = 'x_0'
+    else:
+        raise ValueError('Could not determine x coordinate name for '
+                         'psf_photometry.')
+
+    if hasattr(psf, 'yname'):
+        yname = psf.yname
+    elif 'y_0' in psf.param_names:
+        yname = 'y_0'
+    else:
+        raise ValueError('Could not determine y coordinate name for '
+                         'psf_photometry.')
+
+    if hasattr(psf, 'fluxname'):
+        fluxname = psf.fluxname
+    elif 'flux' in psf.param_names:
+        fluxname = 'flux'
+    else:
+        raise ValueError('Could not determine flux name for psf_photometry.')
+
+    return xname, yname, fluxname
+
+
+
+def add_psf(self, psf, posflux, subshape=None,writetodisk=False,saveas="planted.fits"):
+    """
+    Add (or Subtract) PSF/PRFs from an image.
+
+    Parameters
+    ----------
+    data : `~astropy.nddata.NDData` or array (must be 2D)
+        Image data.
+    psf : `astropy.modeling.Fittable2DModel` instance
+        PSF/PRF model to be substracted from the data.
+    posflux : Array-like of shape (3, N) or `~astropy.table.Table`
+        Positions and fluxes for the objects to subtract.  If an array,
+        it is interpreted as ``(x, y, flux)``  If a table, the columns
+        'x_fit', 'y_fit', and 'flux_fit' must be present.
+    subshape : length-2 or None
+        The shape of the region around the center of the location to
+        subtract the PSF from.  If None, subtract from the whole image.
+
+    Returns
+    -------
+    subdata : same shape and type as ``data``
+        The image with the PSF subtracted
+    """
+
+    # copying so can leave original data untouched
+    hdu = self.sci
+    cphdu = hdu.copy()
+    data = cphdu.data
+    cphdr = cphdu.header
+
+    wcs,frame = WCS(cphdr),cphdr['RADESYS'].lower()
+
+    if data.ndim != 2:
+        raise ValueError(f'{data.ndim}-d array not supported. Only 2-d '
+                         'arrays can be passed to subtract_psf.')
+
+    #  translate array input into table
+    if hasattr(posflux, 'colnames'):
+        if 'x_fit' not in posflux.colnames:
+            raise ValueError('Input table does not have x_fit')
+        if 'y_fit' not in posflux.colnames:
+            raise ValueError('Input table does not have y_fit')
+        if 'flux_fit' not in posflux.colnames:
+            raise ValueError('Input table does not have flux_fit')
+    else:
+        posflux = Table(names=['x_fit', 'y_fit', 'flux_fit'], data=posflux)
+
+    # Set up contstants across the loop
+    psf = psf.copy()
+    xname, yname, fluxname = _extract_psf_fitting_names(psf)
+    indices = np.indices(data.shape)
+    subbeddata = data.copy()
+    addeddata = data.copy()
+    
+    n = 0
+    if subshape is None:
+        indicies_reversed = indices[::-1]
+
+        for row in posflux:
+            getattr(psf, xname).value = row['x_fit']
+            getattr(psf, yname).value = row['y_fit']
+            getattr(psf, fluxname).value = row['flux_fit']
+
+            xp,yp,flux_fit = row['x_fit'],row['y_fit'],row['flux_fit']
+            sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
+            idx = str(n).zfill(3) 
+            cphdr['FK{}X'.format(idx)] = xp
+            cphdr['FK{}Y'.format(idx)] = yp
+            cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+            cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+            cphdr['FK{}F'.format(idx)] = flux_fit
+            # TO-DO, once have actual epsf classes will be clearer to fill the model
+            cphdr['FK{}MOD'.format(idx)] = "NA"
+            n += 1
+
+            subbeddata -= psf(*indicies_reversed)
+            addeddata += psf(*indicies_reversed)
+    else:
+        for row in posflux:
+            x_0, y_0 = row['x_fit'], row['y_fit']
+
+            # float dtype needed for fill_value=np.nan
+            y = extract_array(indices[0].astype(float), subshape, (y_0, x_0))
+            x = extract_array(indices[1].astype(float), subshape, (y_0, x_0))
+
+            getattr(psf, xname).value = x_0
+            getattr(psf, yname).value = y_0
+            getattr(psf, fluxname).value = row['flux_fit']
+
+            xp,yp,flux_fit = row['x_fit'],row['y_fit'],row['flux_fit']
+            sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
+            idx = str(n).zfill(3) 
+            cphdr['FK{}X'.format(idx)] = xp
+            cphdr['FK{}Y'.format(idx)] = yp
+            cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+            cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+            cphdr['FK{}F'.format(idx)] = flux_fit
+            # TO-DO, once have actual epsf classes will be clearer to fill the model
+            cphdr['FK{}MOD'.format(idx)] = "NA"
+            n += 1
+            
+            subbeddata = add_array(subbeddata, -psf(x, y), (y_0, x_0))
+            addeddata = add_array(addeddata, psf(x, y), (y_0, x_0))
+    
+    # the copied hdu written/returned should have data with the added psfs 
+    cphdu.data = addeddata
+    # inserting some new header values
+    cphdr['fakeSN']=True 
+    cphdr['N_fake']=str(len(posflux))
+    cphdr['F_epsf']=str(psf.flux)
+    
+    if writetodisk:
+        fits.writeto(saveas,cphdu.data,cphdr,overwrite=True)
+    
+    self.plants = [cphdu,posflux]
+    self.has_fakes = True # if makes it through this plant_fakes update has_fakes
+
+    return cphdu
 
 def model2dG_build(self):
     """Function to fit a 2d-Gaussian to the built epsf

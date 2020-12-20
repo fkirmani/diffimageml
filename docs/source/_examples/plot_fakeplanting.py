@@ -8,6 +8,7 @@ strongly-lensed supernovae.
 """
 
 import os
+import numpy as np
 import diffimageml
 from matplotlib import pyplot as plt
 
@@ -42,6 +43,11 @@ fakeplantertrio = diffimageml.FakePlanter(
     searchim_fitsfilename=example_data_dict['searchim1'],
     templateim_fitsfilename=example_data_dict['templateim1'])
 
+print("FakePlanter Trio constructed.")
+assert(fakeplantertrio.searchim.has_fakes == False)
+assert(fakeplantertrio.diffim.has_fakes == False)
+print("  (No fakes yet)")
+
 
 ###############################################################
 # Setup 2: Make the PSF Model
@@ -56,7 +62,8 @@ fakeplantertrio.searchim.fetch_gaia_sources(overwrite=False)
 fakeplantertrio.searchim.do_stellar_photometry(
     fakeplantertrio.searchim.gaia_source_table)
 fakeplantertrio.searchim.measure_zeropoint(showplot=False)
-fakeplantertrio.searchim.build_epsf_model(verbose=False, save_suffix='TestEPSFModel')
+fakeplantertrio.searchim.build_epsf_model(
+    verbose=False, save_suffix='TestEPSFModel')
 
 
 ###############################################################
@@ -64,9 +71,57 @@ fakeplantertrio.searchim.build_epsf_model(verbose=False, save_suffix='TestEPSFMo
 # --------
 #
 # Here we plant just 10 very bright fakes
+
+# detect sources in the template image, identify likely galaxies
+fakeplantertrio.templateim.detect_sources()
+hostgaltable = fakeplantertrio.templateim.detect_host_galaxies()
+
+
+# Make 10 locations for random fakes (each relative to a galaxy center point)
+Nfakes = 10
+phi = np.random.uniform(0, 360, Nfakes)
+d = np.random.uniform(0, 5, Nfakes)
+fluxes = np.random.uniform(10**2, 10**4, Nfakes)
+
+# fix the positions of the fakes in x,y coordinates on the diff image
+# This returns three tables: one each for the diffim, searchim, and templateim
+fake_positions_and_fluxes = fakeplantertrio.set_fake_positions_at_galaxies(
+    phi, d, fluxes)
+
+# Grab the existing ePSF model from the search image
 epsfmodel = fakeplantertrio.searchim.epsf
-hostgalcat = fakeplantertrio.templateim.detect_host_galaxies()
-fakeplantertrio.plant_fakes_in_diffim(epsfmodel, posfluxtable=fakeloc)
+
+# Plant the fakes
+fakeplantertrio.plant_fakes_triplet(
+    fake_positions_and_fluxes, psfmodel=epsfmodel,
+    writetodisk=False, save_suffix="planted.fits")
+
+print("Fake planting is done.")
+assert(fakeplantertrio.diffim.has_fakes==True)
+assert(fakeplantertrio.searchim.has_fakes==True)
+print(" has_fakes is True, True!")
+
+
+###############################################################
+# Display Fakes
+# --------
+#
+# Show a few examples of fakes from the diff image, using a few
+# random indices from the list of fakes
+
+fakeIDs, fake_positions =  fakeplantertrio.get_fake_locations()
+
+rng = np.random.default_rng()
+fakeids_to_show = rng.choice(fakeIDs, 3)
+print(fakeids_to_show)
+
+
+###############################################################
+# TODO:  Show us the fakes!!
+# --------
+#
+
+# fakeplantertrio.plot_fakes(fake_indices=fakeids_to_show)
 
 
 

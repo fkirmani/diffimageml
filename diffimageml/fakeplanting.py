@@ -73,15 +73,29 @@ class FitsImage:
         """
 
         self.filename = fitsfilename
-        self.read_fits_file(fitsfilename)
+
         self.psfstars = None
+        self.fitted_stars = None
         self.psfmodel = None
         self.epsf = None
 
+        self.hdulist = None
+        self.sci = None
+
+        self.wcs = None
+        self.frame = None
+
+        self.sci_with_fakes = None
+        self.fakes_posflux_table = None
+
         self.sourcecatalog = None
+        self.hostgalaxies = None
         self.zeropoint = None
         self.stellar_phot_table = None
         self.gaia_source_table = None
+
+        self.read_fits_file(fitsfilename)
+
         return
 
     def read_fits_file(self,fitsfilename):
@@ -215,7 +229,21 @@ class FitsImage:
         meta = {'detect_params':{"nsigma":nsigma,"kfwhm":kfwhm,"npixels":npixels,
                                                 "deblend":deblend,"contrast":contrast}}
 
-        self.sourcecatalog = cat 
+        self.sourcecatalog = cat
+
+        # TODO : identify indicies of extended sources and make a property
+        #  of the class that just gives an index into the source catalog
+        #for i in self.sourcecatalog:
+        #    if i.ellipticity > 0.35: ##Identifies Galaxies
+        ##        if i.area.value < 8 and cut_cr: ##Removes cosmic rays
+        #            continue
+        #        xcol.append(i.centroid[1])
+        #        ycol.append(i.centroid[0])
+        #        source_propertiescol.append(i)
+        # hostgalaxies = Table([xcol , ycol , source_propertiescol] , names = ("x" , "y" , "Source Properties"))
+        # self.hostgalaxies = hostgalaxies
+        # return self.hostgalaxies
+
         return self.sourcecatalog
     
 
@@ -254,14 +282,15 @@ class FitsImage:
                 ycol.append(i.centroid[0])
                 source_propertiescol.append(i)
         hostgalaxies = Table([xcol , ycol , source_propertiescol] , names = ("x" , "y" , "Source Properties"))
-                
-        
+
+
         self.hostgalaxies = hostgalaxies
         return self.hostgalaxies
 
     
-    def plant_fakes(self, psfmodel, posflux, subshape=None,
-                    writetodisk=False, saveas="planted.fits"):
+    def plant_fakes_in_sci(self, psfmodel, posflux, subshape=None,
+                           preserve_original=False,
+                           writetodisk=False, save_suffix="withfakes"):
         """
         Add PSF/PRFs ("fakes") to the image data array.
         Also update the header to record the pixel positions and fluxes for
@@ -271,13 +300,29 @@ class FitsImage:
         ----------
         psfmodel : `astropy.modeling.Fittable2DModel` instance
             PSF/PRF model to be substracted from the data.
+
         posflux : Array-like of shape (3, N) or `~astropy.table.Table`
             Positions and fluxes for the objects to add.  If an array,
             it is interpreted as ``(x, y, flux)``  If a table, the columns
             'x_fit', 'y_fit', and 'flux_fit' must be present.
+
         subshape : length-2 or None
             The shape of the region around the center of the location to
             add the PSF to.  If None, add to the whole image.
+
+        preserve_original : bool
+            if True, store a copy of the unmodified original sci HDU as
+            self.sci_orig
+
+        writetodisk :  bool
+            if True - write out the modified image data as fits files.
+            Separate fits files are written for the search image and the
+            difference image.
+
+        save_suffix : str
+            suffix to use for the output fits files. Each filename is defined
+            as  <original_fits_filename_root>_<save_suffix>.fits
+
 
         Returns
         -------
@@ -286,13 +331,15 @@ class FitsImage:
             with new cards carrying the fake star meta-data.
         """
 
-        # copying so we can leave the original data untouched
-        hdu = self.sci
-        hdu_withfakes = hdu.copy()
-        data = hdu_withfakes.data
-        cphdr = hdu_withfakes.header
+        if preserve_original:
+            # making a copy to preserve original untouched sci data + hdr
+            self.sci_orig = self.sci.copy()
 
-        wcs,frame = WCS(cphdr),cphdr['RADESYS'].lower()
+        data = self.sci.data
+        hdr = self.sci.header
+
+        # TODO:  already have self.wcs and self.frame ??
+        wcs,frame = WCS(hdr),hdr['RADESYS'].lower()
 
         if data.ndim != 2:
             raise ValueError(f'{data.ndim}-d array not supported. Only 2-d '
@@ -309,36 +356,40 @@ class FitsImage:
         else:
             posflux = Table(names=['x_fit', 'y_fit', 'flux_fit'], data=posflux)
 
-        # Set up contstants across the loop
-        psfmodel = psfmodel.copy()
-        xname, yname, fluxname = _extract_psf_fitting_names(psfmodel)
+        # Set up constants across the loop
+        # TODO: Do we need a copy of the psf model here? Do we need a new copy
+        # for each fake that gets planted ?
+        psfmodelcopy = psfmodel.copy()
+        xname, yname, fluxname = extract_psf_fitting_names(psfmodel)
         indices = np.indices(data.shape)
+
+        # TODO : now that we've got an option to preserve_original do we need copies here?
         subbeddata = data.copy()
         addeddata = data.copy()
         
-        n = 0
+        nfakes_planted = 0
         if subshape is None:
             indicies_reversed = indices[::-1]
 
             for row in posflux:
-                getattr(psfmodel, xname).value = row['x_fit']
-                getattr(psfmodel, yname).value = row['y_fit']
-                getattr(psfmodel, fluxname).value = row['flux_fit']
+                getattr(psfmodelcopy, xname).value = row['x_fit']
+                getattr(psfmodelcopy, yname).value = row['y_fit']
+                getattr(psfmodelcopy, fluxname).value = row['flux_fit']
 
                 xp,yp,flux_fit = row['x_fit'],row['y_fit'],row['flux_fit']
                 sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
-                idx = str(n).zfill(3) 
-                cphdr['FK{}X'.format(idx)] = xp
-                cphdr['FK{}Y'.format(idx)] = yp
-                cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
-                cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
-                cphdr['FK{}F'.format(idx)] = flux_fit
+                idx = str(nfakes_planted).zfill(3)
+                hdr['FK{}X'.format(idx)] = xp
+                hdr['FK{}Y'.format(idx)] = yp
+                hdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+                hdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+                hdr['FK{}F'.format(idx)] = flux_fit
                 # TO-DO, once have actual epsf classes will be clearer to fill the model
-                cphdr['FK{}MOD'.format(idx)] = "NA"
-                n += 1
+                hdr['FK{}MOD'.format(idx)] = "NA"
+                nfakes_planted += 1
 
                 #subbeddata -= psfmodel(*indicies_reversed)
-                addeddata += psfmodel(*indicies_reversed)
+                addeddata += psfmodelcopy(*indicies_reversed)
         else:
             for row in posflux:
                 x_0, y_0 = row['x_fit'], row['y_fit']
@@ -347,38 +398,51 @@ class FitsImage:
                 y = extract_array(indices[0].astype(float), subshape, (y_0, x_0))
                 x = extract_array(indices[1].astype(float), subshape, (y_0, x_0))
 
-                getattr(psfmodel, xname).value = x_0
-                getattr(psfmodel, yname).value = y_0
-                getattr(psfmodel, fluxname).value = row['flux_fit']
+                getattr(psfmodelcopy, xname).value = x_0
+                getattr(psfmodelcopy, yname).value = y_0
+                getattr(psfmodelcopy, fluxname).value = row['flux_fit']
 
                 xp,yp,flux_fit = row['x_fit'],row['y_fit'],row['flux_fit']
                 sky = wcsutils.pixel_to_skycoord(xp,yp,wcs)
-                idx = str(n).zfill(3) 
-                cphdr['FK{}X'.format(idx)] = xp
-                cphdr['FK{}Y'.format(idx)] = yp
-                cphdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
-                cphdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
-                cphdr['FK{}F'.format(idx)] = flux_fit
+                idx = str(nfakes_planted).zfill(3)
+                hdr['FK{}X'.format(idx)] = xp
+                hdr['FK{}Y'.format(idx)] = yp
+                hdr['FK{}RA'.format(idx)] = str(sky.ra.hms)
+                hdr['FK{}DEC'.format(idx)] = str(sky.dec.dms)
+                hdr['FK{}F'.format(idx)] = flux_fit
                 # TO-DO, once have actual epsf classes will be clearer to fill the model
-                cphdr['FK{}MOD'.format(idx)] = "NA"
-                n += 1
+                hdr['FK{}MOD'.format(idx)] = "NA"
+                nfakes_planted += 1
                 
-                addeddata = add_array(addeddata, psfmodel(x, y), (y_0, x_0))
-        
-        # the copied hdu written/returned should have data with the added psfs 
-        hdu_withfakes.data = addeddata
+                addeddata = add_array(addeddata, psfmodelcopy(x, y), (y_0, x_0))
+
+        # update the data array with all fakes in it
+        self.sci.data = addeddata
+
         # inserting some new header values
-        cphdr['HASFAKES']=True
-        cphdr['NFAKES']=str(len(posflux))
-        cphdr['PSF_FLUX']=str(psfmodel.flux)
+        hdr['HASFAKES'] = True
+        hdr['NFAKES'] = nfakes_planted
+        hdr['PSF_FLUX'] = getattr(psfmodel, fluxname).value
         
         if writetodisk:
-            fits.writeto(saveas,hdu_withfakes.data,cphdr,overwrite=True)
-        
-        self.plants = [hdu_withfakes,posflux]
-        self.has_fakes = True # if makes it through this plant_fakes update has_fakes
+            fits.writeto(save_suffix, self.sci.data, hdr, overwrite=True)
 
-        return hdu_withfakes
+        self.fake_source_table = posflux
+
+        return
+
+    @property
+    def has_fakes(self):
+        """True if this FitsImage has fakes in it.
+        Note: only checks the image header.
+        """
+        if 'HASFAKES' in self.sci.header:
+            if self.sci.header['HASFAKES']:
+                if self.sci.header['NFAKES']>0:
+                    if 'FK000X' in self.sci.header:
+                        if self.sci.header['FK000X'] is not None:
+                            return True
+        return False
 
 
     def fetch_gaia_sources(self, save_suffix='GaiaCat', overwrite=False,
@@ -1151,13 +1215,23 @@ class FakePlanter:
         if templateim_fitsfilename:
             self.templateim = FitsImage(templateim_fitsfilename)
 
-        # has_fakes False until run plant_fakes
-        self.has_fakes = False
         # has_lco_epsf False until run lco_epsf
         self.has_lco_epsf = False
         # detection_efficiency None until calculated
         self.detection_efficiency = None
         return
+
+    @property
+    def has_fakes(self):
+        """Returns a list of the component images (templateim, searchim,
+        diffim) that have fakes planted.
+        If none have fakes, then returns an empty list.
+        """
+        hasfakeslist =  []
+        for im in [self.templateim, self.searchim, self.diffim]:
+            if im.has_fakes:
+                hasfakeslist.append(im)
+        return(hasfakeslist)
 
 
     @property
@@ -1284,11 +1358,11 @@ class FakePlanter:
         return [posflux_diff,posflux_search,posflux_template]
 
 
-    def plant_fakes_in_diffim(self, posfluxtable, psfmodel='epsf',
-                              writetodisk=False, saveas="planted.fits"):
-        """Function for planting fake stars in the diff image.
-        Using the ePSF model defined by the search image, adds fake PSFs
-        at the x,y pixel positions and flux scales given in posfluxtable.
+    def plant_fakes_triplet(self, posfluxtable, psfmodel='epsf',
+                            writetodisk=False, save_suffix="withfakes"):
+        """Function for planting fake stars in the diff image and the search
+        image.  Using the ePSF model defined by the search image, adds fake
+        PSFs at the x,y pixel positions and flux scales given in posfluxtable.
         This could be positioned around detected galaxy positions (i.e., if the
         posfluxtable was generated using set_fake_positions_at_galaxies).
 
@@ -1307,6 +1381,15 @@ class FakePlanter:
             If a str, must be the name of a PSF model currently defined as a
             property of the searchim (e.g. 'epsf')
 
+        writetodisk :  bool
+            if True - write out the modified image data as fits files.
+            Separate fits files are written for the search image and the
+            difference image.
+
+        save_suffix : str
+            suffix to use for the output fits files. Each filename is defined
+            as  <original_fits_filename_root>_<save_suffix>.fits
+
         Returns
         -------
         hdu_with_fakes : FITS HDU object
@@ -1316,9 +1399,13 @@ class FakePlanter:
         if type(psfmodel) is str:
             psfmodel = self.searchim.__getattribute__(psfmodel)
 
-        hdu_with_fakes = self.diffim.plant_fakes(psfmodel, posfluxtable)
+        self.diffim.plant_fakes_in_sci(psfmodel, posfluxtable[0])
+        self.searchim.plant_fakes_in_sci(psfmodel, posfluxtable[1])
 
-        return hdu_with_fakes
+        # TODO : add writing to disk
+        if writetodisk:
+            print("Oops. We haven't written this yet.")
+        return
 
 
     def added_triplet(self,epsf,posfluxes):
@@ -1335,9 +1422,9 @@ class FakePlanter:
         # TODO could also use self.im.lensed_locations
         # posfluxes needs to be generalized more carefully
         # posfluxes assuming list of posflux returned as diff,search,template 
-        diffplants = self.diffim.plant_fakes(epsf, posfluxes[0])
-        searchplants = self.searchim.plant_fakes(epsf, posfluxes[1])
-        templateplants = self.templateim.plant_fakes(epsf, posfluxes[2])
+        diffplants = self.diffim.plant_fakes_in_sci(epsf, posfluxes[0])
+        searchplants = self.searchim.plant_fakes_in_sci(epsf, posfluxes[1])
+        templateplants = self.templateim.plant_fakes_in_sci(epsf, posfluxes[2])
 
         return [diffplants,searchplants,templateplants]
 
@@ -1585,18 +1672,36 @@ class FakePlanter:
         
         return [TP,FN,FP,TN]
     
-    def get_fake_locations(self,image_with_fakes):
-        fake_plant_x_keys = [key for key in image_with_fakes.header.keys() if\
-                         'FK' in key and 'X' in key]
-        fake_plant_x = [image_with_fakes.header[key] for key in fake_plant_x_keys]
+    def get_fake_locations(self,image_with_fakes=None):
+        """Returns a list of fakeIDs and (x,y) pixel locations for the
+        specified image.  The info for each fake is read from the
+        'sci' attribute of the specified FitsImage object.  The 'sci' attribute
+        is a fits HDU object, and the info for each fake is extracted from
+        the header keywords (starting with 'FK').
+
+        Parameters
+        ----------
+        image_with_fakes : `~fakeplanting.FitsImage`
+            A FitsImage object containing the planted fake sources in it.
+            (default self.diffim)
+
+        """
+        if image_with_fakes is None:
+            image_with_fakes = self.diffim
+
+        fake_plant_x_keys = [key for key in image_with_fakes.sci.header.keys() if \
+                             key.startswith('FK') and key.endswith('X')]
+        fake_plant_x = []
         fake_plant_y = []
         fakeIDs = []
         for key in fake_plant_x_keys:
             fake_id = key[2:2+len(str(_MAX_N_PLANTS_))]
             fakeIDs.append(fake_id)
-            fake_plant_y.append(image_with_fakes.header['FK%sY'%fake_id])
+            fake_plant_x.append(image_with_fakes.sci.header['FK%sX'%fake_id])
+            fake_plant_y.append(image_with_fakes.sci.header['FK%sY'%fake_id])
         fake_positions = np.array([fake_plant_x,fake_plant_y]).T
-        return fakeIDs,fake_positions
+        return fakeIDs, fake_positions
+
 
     def set_fake_detection_header(self,image_with_fakes,detection_table=None,outfilename=None):
         if detection_table is None:
