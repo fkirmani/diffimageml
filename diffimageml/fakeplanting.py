@@ -81,6 +81,7 @@ class FitsImage:
         self.sourcecatalog = None
         self.zeropoint = None
         self.stellar_phot_table = None
+        self.gaia_source_table = None
         return
 
     def read_fits_file(self,fitsfilename):
@@ -541,7 +542,7 @@ class FitsImage:
 
 
 
-    def do_stellar_photometry(self , gaia_catalog):
+    def do_stellar_photometry(self , gaia_catalog = None):
         """Takes in a source catalog for stars in the image from Gaia. Will perform
         aperture photometry on the sources listed in this catalog.
 
@@ -549,29 +550,44 @@ class FitsImage:
         ----------
 
         gaia_catalog: Astropy Table : Contains information on Gaia sources in the image
-        
+            You can also provide a catalog from detect_sources. If None, will use self.gaia_source_table
+
         self.stellar_phot_table : Astropy Table : Table containing the measured magnitudes
         for the stars in the image obtained from the Gaia catalog.
         
         """
         
         ##TODO: Add something to handle overstaturated sources
-        ##TODO: Improve aperture sizes
         ##We currently just ignore anything brighter than m = 16 to avoid saturated sources
         
+        if not self.gaia_source_table and not gaia_catalog:
+            print ("Warning: No catalog provided for aperture photometry.")
+            print ("Run fetch_gaia_sources or providea source catalog")
+            return
+
+        elif not gaia_catalog:
+            gaia_catalog = self.gaia_source_table
+
         positions = []
         
         for i in gaia_catalog:
-        
-            if i['mag'] < 16:
+
+            if 'mag' in gaia_catalog.colnames and i['mag'] < 16:
                 continue
-                
-            positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
+            if 'x' in gaia_catalog.colnames:
+                positions.append( ( i['x'] , i['y'] ) ) ##Pixel coords for each source
+            else:
+                positions.append((i['xcentroid'].value , i['ycentroid'].value))
         
         ##Set up the apertures
-        apertures = CircularAperture(positions, r= 10)
+
+        pixscale = self.sci.header["PIXSCALE"]
+        FWHM = self.sci.header["L1FWHM"]
         
-        annulus_aperture = CircularAnnulus(positions, r_in = 15 , r_out = 20)
+        aperture_radius = 2 * FWHM / pixscale
+        apertures = CircularAperture(positions, r= aperture_radius)
+
+        annulus_aperture = CircularAnnulus(positions, r_in = aperture_radius + 5 , r_out = aperture_radius + 10)
         annulus_masks = annulus_aperture.to_mask(method='center')
         
         ##Background subtraction using sigma clipped stats.
@@ -601,7 +617,7 @@ class FitsImage:
 
     def plot_stellar_photometry(self):
         """Simple plot of the stellar photometry results"""
-        # TODO: update to show a comparison of aperture vs psfmodel photometry
+        # TODO: update to show a comparison of aperture vs psf photometry
 
         try:
             assert(self.stellar_phot_table is not None)
@@ -791,7 +807,7 @@ class FitsImage:
         # TODO? sort by the strongest signal/noise in r' filter
         # r.sort('phot_rp_mean_flux_over_error')
         """
-        # don't think it will be necessary to limit to some N stars, might as well take all that will give good data for building psfmodel
+        # don't think it will be necessary to limit to some N stars, might as well take all that will give good data for building psf
         if Nbrightest == None:
             Nbrightest = len(r)
         brightest_results = r[:Nbrightest]
@@ -1233,7 +1249,7 @@ class FakePlanter:
         # relative to North.
         orientation = units.deg * np.array(
             [srcprop.orientation.value for srcprop
-             in hostgalaxies["Source Properties"][galaxy_indices] ])         
+             in hostgalaxies["Source Properties"][galaxy_indices] ])
 
         # Compute the offsets from galaxy center position
         delta_x = d_pix * np.cos((orientation + phi_deg * units.deg))
@@ -1338,7 +1354,6 @@ class FakePlanter:
         Returns list [[self.diffim.plants,self.searchim.plants,self.templateim.plants],
                     [diffim.plants.postage_stamp,searchim.plants.postage_stamp,templatim.plants.postage_stamp]] 
         """
-
         diffim = self.diffim
         searchim = self.searchim
         templateim = self.templateim
@@ -1366,10 +1381,146 @@ class FakePlanter:
         return self.has_fakes
 
 
+    def find_plant_detections(self , image_with_fakes = None):
+
+        """
+        Builds catalog of succesfully detected fake sources
+
+        Parameters
+        ----------
+        image_with_fakes : A diff image with fakes planted. If None, will assume that it is self.diffim
+            In this case we will use detect sources with the default parameters
+
+        Returns
+        -------
+        self.plant_detections : Astropy Table : Contains the x and y positions for each planted fake, and
+            the detect column will contain a 1 if the source is recovered succesfully and a 0 otherwise
+        """
+
+        if image_with_fakes == None:
+            image_with_fakes = self.diffim
+
+        if not image_with_fakes.has_detections:
+            image_with_fakes.detect_sources()
+
+        fakeID , fakeposition = self.get_fake_locations(image_with_fakes.sci)
+
+        pixscale = image_with_fakes.sci.header["PIXSCALE"]
+        FWHM = image_with_fakes.sci.header["L1FWHM"]
+        radius = FWHM / pixscale
+
+        detect = []
+        x = []
+        y = []
+        magnitudes = []
+
+        for i in fakeposition:
+            x.append(i[0])
+            y.append(i[1])
+            d = 0
+            for k in image_with_fakes.sourcecatalog:
+                if np.sqrt( (k.centroid[1].value - i[0]) ** 2 + (k.centroid[0].value - i[1]) ** 2) < radius:
+                    d = 1
+                    break
+            detect.append(d)
+
+        if not image_with_fakes.stellar_phot_table:
+            image_with_fakes.do_stellar_photometry(image_with_fakes.sourcecatalog.to_table())
+        if not self.searchim.gaia_source_table:
+            self.searchim.fetch_gaia_sources()
+        if not self.searchim.stellar_phot_table:
+            self.searchim.do_stellar_photometry(self.searchim.gaia_source_table)
+        if not self.searchim.zeropoint:
+            self.searchim.measure_zeropoint()
+
+        for i in range(len(x)):
+            xposition = x[i]
+            yposition = y[i]
+
+            found = False
+            for k in image_with_fakes.stellar_phot_table:
+
+                if np.sqrt( (k['xcenter'].value - xposition) ** 2 + (k['ycenter'].value - yposition) ** 2) < radius:
+                    if np.isnan(k['mag']):
+                        magnitudes.append(k['mag'])
+                    magnitudes.append(k['mag'] + self.searchim.zeropoint)
+                    found = True
+                    break
+            if not found:
+                magnitudes.append(999)
+
+        self.plant_detections = Table([x , y , detect , magnitudes] , names = ('x','y','detect' , 'mag'))
+
+    def find_false_positives(self , clean_diff = None):
+        """
+        Runs aperture photometry on the false positives.
+
+        Parameters
+        ----------
+        clean_diff : If None, will use self.diffim. Otherwise should be a FitsImage object
+            containing a clean difference image corresponding to self.searchim
+
+
+
+        Returns
+        -------
+        false_positives : Astropy Table : detected source catalog complete with photometry
+
+
+        """
+
+
+        if not clean_diff:
+            clean_diff = self.diffim
+
+
+        ##radius for matching sources across catalogs
+        pixscale = clean_diff.sci.header["PIXSCALE"]
+        FWHM = clean_diff.sci.header["L1FWHM"]
+        radius = FWHM / pixscale
+
+        ##Find zeropoint (and other quantities) if necessary
+        if not self.searchim.gaia_source_table:
+            self.searchim.fetch_gaia_sources()
+        if not self.searchim.stellar_phot_table:
+            self.searchim.do_stellar_photometry(self.searchim.gaia_source_table)
+        if not self.searchim.zeropoint:
+            self.searchim.measure_zeropoint()
+
+
+        if not clean_diff.sourcecatalog:
+            clean_diff.detect_sources()
+
+        if not clean_diff.stellar_phot_table:
+            clean_diff.do_stellar_photometry(clean_diff.sourcecatalog.to_table())
+
+        x = []
+        y = []
+        mag = []
+
+        for i in clean_diff.sourcecatalog.to_table():
+            xcenter = i["xcentroid"].value
+            ycenter = i["ycentroid"].value
+            x.append(xcenter)
+            y.append(ycenter)
+            found = False
+            for k in clean_diff.stellar_phot_table:
+                if np.sqrt( (xcenter - k['xcenter'].value) ** 2 + (ycenter - k['xcenter'].value ) ** 2 ) < radius:
+                    mag.append(k['mag'] + self.searchim.zeropoint)
+                    found = True
+                    break
+            if not found:
+                mag.append(999)
+
+        return Table([x , y , mag ] , names = ('x' , 'y' , 'mag'))
 
 
     def confusion_matrix(self,fp_detections=None):
         """Function for creating confusion matrix of detections vs plants
+        low_mag_lin : Will ignore sources with magnitudes less than this
+        high_mag_lim : Will ignore sources with magnitudes greater than this
+        use_mag : If True, produce confusion matrix with magnitude limits.
+            If false, do not use magnitude limits
         """
 
         #TO-DO decide what the confusion_matrix shoud look like
@@ -1378,6 +1529,10 @@ class FakePlanter:
         #plant_detections a yet to be defined property
         #will be something like a catalog/file with rows for each planted object 
         #plants have a col for detect ~ 1 is detection (TP), 0 is non-detection (FN)
+
+        if self.plant_detections == None:
+            self.find_plant_detections()
+
         plants = self.plant_detections
         
         #fp_detections is the same type of catalog/file from plants detection but run using the clean diff
@@ -1388,20 +1543,45 @@ class FakePlanter:
         FN = [] # not detected plant
         FP = [] # detected, but not a plant, (all the detections on clean diffim)
         TN = None # not detected not a plant, (no meaning)
+
+
         for i in plants:
+            if use_magnitudes and i['mag'] < low_mag_lim or i['mag'] > high_mag_lim:
+                continue
             if i['detect'] == 1:
                 TP.append(i)
             elif i['detect'] == 0:
                 FN.append(i)
-        TP = vstack(TP)
-        FN = vstack(FN)
+
+        if len(TP) != 0:
+            TP = vstack(TP)
+        else:
+            TP = []
+        if len(FN) != 0:
+            FN = vstack(FN)
+        FN = []
         
         if fp_detections:
             FP = fp_detections
         else:
             # TO-DO set the parameters in detect_sources using vals from run on the plant 
             # self.detection_vals = [nsigma,kfwhm,npixels,deblend,contrast]
-            FP = detect_sources(self.diffim.sci)
+            if not use_magnitudes:
+                FP = detect_sources(self.diffim.sci)
+            else:
+
+                false_positives = find_false_positives()
+                FP = []
+                for i in false_positives:
+                    if false_positives['mag'] > high_mag_lim or false_positives['mag'] < high_mag_lim:
+                        continue
+                    FP.append(i)
+
+                if len(FP) != 0:
+                    FP = vstack(FP)
+                else:
+                    FP = []
+
         
         return [TP,FN,FP,TN]
     
