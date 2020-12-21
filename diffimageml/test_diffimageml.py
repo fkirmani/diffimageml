@@ -1,5 +1,5 @@
 ##Test File
-import sys,os,traceback,pickle
+import sys,os,traceback,pickle,unittest,warnings
 import numpy as np
 from astropy.table import Table
 
@@ -7,7 +7,6 @@ _SRCDIR_ = os.path.abspath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
 import diffimageml
-
 
 # Hard coding the test data filenames
 _DIFFIM1_ = os.path.abspath(os.path.join(
@@ -28,306 +27,157 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
     _SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_GOFAST_ = True # Use this to skip slow tests
+_GOFAST_ = False # Use this to skip slow tests
 
-def test_pristine_data():
+class TestDataExistence(unittest.TestCase):
     """
-    Check for existence of the pristine (level 0) test data
-    located in the testdata directory
+        Check for existence of the pristine (level 0) test data
+        located in the testdata directory
     """
-    assert os.path.isfile(_DIFFIM1_)
-    assert os.path.isfile(_SEARCHIM1_)
-    assert os.path.isfile(_TEMPLATEIM1_)
-
-    assert os.path.isfile(_DIFFIM2_)
-    assert os.path.isfile(_SEARCHIM2_)
-    assert os.path.isfile(_TEMPLATEIM2_)
-
-    return 1
-
-def test_fetch_gaia_sources():
-    """ Check that an astroquery call to the Gaia db works"""
-    # read in a fits file
-    searchim1 = diffimageml.fakeplanting.FitsImage(_SEARCHIM1_)
-
-    # fetch gaia data
-    # NOte: we adjust the save_suffix so we can test saving of the output to
-    # a file, but it will not conflict  with existence of a pre-baked gaia
-    # catalog test file with the default suffix GaiaCat
-    searchim1.fetch_gaia_sources(save_suffix='TestGaiaCat')
-
-    # TODO : more informative test output?
-    assert type(searchim1.gaia_source_table) == Table
-    assert len(searchim1.gaia_source_table) > 0
-    #assert os.path.isfile(searchim1.gaia_source_table.savefilename)
-
-    return 1
-
-def test_photometry_of_stars():
-    """Check measuring photometry of known stars in the image"""
-    fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
-    # TODO: must also get gaia sources, but that's a separate test, should
-    #  do them in series, and pass the object along?
-    fitsimageobject.fetch_gaia_sources()
-    fitsimageobject.do_stellar_photometry(fitsimageobject.gaia_source_table)
-    assert(fitsimageobject.stellar_phot_table is not None)
-    return
+    def test_pristine_difference1(self):
+        self.assertTrue(os.path.isfile(_DIFFIM1_))
+    def test_pristine_difference2(self):
+        self.assertTrue(os.path.isfile(_DIFFIM2_))
+    def test_pristine_search1(self):
+        self.assertTrue(os.path.isfile(_SEARCHIM1_))
+    def test_pristine_search2(self):
+        self.assertTrue(os.path.isfile(_SEARCHIM2_))
+    def test_pristine_template1(self):
+        self.assertTrue(os.path.isfile(_TEMPLATEIM1_))
+    def test_pristine_template2(self):
+        self.assertTrue(os.path.isfile(_TEMPLATEIM2_))
 
 
-def test_measure_zeropoint():
-    """Check measuring of zeropoint from known stars in the image"""
-    fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
-    # TODO: must also get gaia sources, but that's a separate test, should
-    #  do them in series, and pass the object along?
-    fitsimageobject.measure_zeropoint()
-    assert(fitsimageobject.zeropoint is not None)
-    return
+class TestPlanter(unittest.TestCase):
 
-def test_build_epsf_model(verbose=True):
-    """Check construction of an ePSF model from Gaia stars.
-    """
-    fitsimageobject = diffimageml.FitsImage(_SEARCHIM1_)
+    def setUp(self):
+        """Create a FakePlanter object from the pristine (level 0) test data"""
+        self.fakeplanterobject = diffimageml.FakePlanter(
+            _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
+        
 
-    # Fetch gaia sources (read from disk if possible)
-    fitsimageobject.fetch_gaia_sources(save_suffix='TestGaiaCat')
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_fakeplanter`")
+    def test_fakeplanter(self,accuracy=0.05):
+        epsf = diffimageml.util.lco_epsf(self.fakeplanterobject)
+        locations = diffimageml.util.get_lattice_positions(self.fakeplanterobject)
+        pixels,skycoords = locations
 
-    # Build the ePSF model and save to disk
-    fitsimageobject.build_epsf_model(
-        verbose=verbose, save_suffix='TestEPSFModel')
+        # TODO: this is gonna need debugging
+        pre_imdata = self.fakeplanterobject.diffim.sci.data
+        post_im = self.fakeplanterobject.plant_fakes_triplet(epsf, pixels)
+        post_imdata = post_im.data
 
-    assert(fitsimageobject.epsf is not None)
-    assert(fitsimageobject.epsf.data.sum()>0)
-
-    # read in the ePSF model we just created
-    fitsimageobject.read_epsf_model(save_suffix='TestEPSFModel')
-    assert(fitsimageobject.epsf is not None)
-    assert(fitsimageobject.epsf.data.sum()>0)
-
-    return
+        fitsflux = np.sum(post_imdata - pre_imdata)
+        # TODO: this should have SCA to stay general if plants are scaled differently
+        epsfflux = int(post_im.header['N_fake'])*float(post_im.header['F_epsf'])
+        self.assertTrue(np.abs(fitsflux-epsfflux)/epsfflux < accuracy)
 
 
-def test_fakeplanter_class():
-    """Create a FakePlanter object from the pristine (level 0) test data"""
-    fakeplanterobject = diffimageml.FakePlanter(
-        _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
-    return 1
+class TestFitsImage(unittest.TestCase):
+    def setUp(self):
+        self.FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
+        # OK to run this even in _GOFAST_ mode b/c it will load a pre-baked cat
+        self.FitsImageClassInstance.fetch_gaia_sources(save_suffix='TestGaiaCat')
+
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_fetch_gaia_sources`")
+    def test_fetch_gaia_sources(self):
+        """ Check that an astroquery call to the Gaia db works"""
+        self.assertEqual(type(self.FitsImageClassInstance.gaia_source_table),
+                         Table)
+        self.assertTrue(len(self.FitsImageClassInstance.gaia_source_table) > 0)
+
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_photometry_of_stars`")
+    def test_photometry_of_stars(self):
+        # TODO: must also get gaia sources, but that's a separate test, should
+        #  do them in series, and pass the object along?
+        self.FitsImageClassInstance.do_stellar_photometry(self.FitsImageClassInstance.gaia_source_table)
+        self.assertTrue(self.FitsImageClassInstance.stellar_phot_table is not None)
+
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_build_epsf_model`")
+    def test_build_epsf_model(self,verbose=True):
+        """Check construction of an ePSF model from Gaia stars.
+        """
+        # Build the ePSF model and save to disk
+        self.FitsImageClassInstance.build_epsf_model(
+            verbose=verbose, save_suffix='TestEPSFModel')
+
+        self.assertTrue(self.FitsImageClassInstance.epsf is not None)
+        self.assertTrue(self.FitsImageClassInstance.epsf.data.sum()>0)
+
+        # read in the ePSF model we just created
+        self.FitsImageClassInstance.load_epsfmodel_from_pickle(
+            save_suffix='TestEPSFModel')
+        self.assertTrue(self.FitsImageClassInstance.epsf is not None)
+        self.assertTrue(self.FitsImageClassInstance.epsf.data.sum()>0)
+
+    def test_measure_zeropoint(self):
+        """Check measuring of zeropoint from known stars in the image"""
+        self.FitsImageClassInstance.do_stellar_photometry(
+            self.FitsImageClassInstance.gaia_source_table)
+        self.FitsImageClassInstance.measure_zeropoint()
+        self.assertTrue(self.FitsImageClassInstance.zeropoint is not None)
+        
+    def tearDown(self):
+        self.FitsImageClassInstance.hdulist.close()
 
 
-def test_fakeplanter(accuracy=0.05):
-    # a fake planter object which has had fake planting done
-    fakeplanterobject = diffimageml.FakePlanter(
-        _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
+class TestSourceDetection(unittest.TestCase):
+    def setUp(self):
+        self.FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
+        self.FakePlanterClassInstance = diffimageml.FakePlanter(
+            _FAKEDIFFIM2_)
 
-    epsf = diffimageml.util.lco_epsf(fakeplanterobject)
-    locations = diffimageml.util.get_lattice_positions(fakeplanterobject)
-    pixels,skycoords = locations
-
-    # TODO: this is gonna need debugging
-    pre_imdata = fakeplanterobject.diffim.sci.data
-    post_im = fakeplanterobject.plant_fakes(epsf,pixels)
-    post_imdata = post_im.data
-
-    fitsflux = np.sum(post_imdata - pre_imdata)
-    # TODO: this should have SCA to stay general if plants are scaled differently
-    epsfflux = int(post_im.header['N_fake'])*float(post_im.header['F_epsf'])
-    #print(fitsflux,epsfflux)
-    if np.abs(fitsflux-epsfflux)/epsfflux < accuracy:
-        #print("plant was successful")
-        return 1
-
-def test_FitsImageClass():
-    from astropy.io.fits import HDUList,PrimaryHDU
-    FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
-    assert( isinstance(FitsImageClassInstance.hdulist,HDUList))
-    return FitsImageClassInstance
-
-def test_source_detection(FitsImageTest):
-    source_catalog = FitsImageTest.detect_sources()
-    return FitsImageTest.has_detections()
-
-def test_detection_efficiency():
-    fakeplanterobject = diffimageml.FakePlanter(
-        _FAKEDIFFIM2_)
-    eff = fakeplanterobject.calculate_detection_efficiency()
-    return eff
-
-def test_host_galaxy_detection(Image=None):
-    import numpy as np
-    if Image == None:
-        SkyImageClassInstance=diffimageml.FitsImage(_SEARCHIM1_)
-        SkyImageClassInstance.detect_sources()
-    elif not Image.has_detections:
-        Image.detect_sources()
-        SkyImageClassInstance = Image
-    else:
-        SkyImageClassInstance = Image
-    pixel_x = 2012
-    pixel_y = 2056
-    ra = 17.3905276
-    dec = 15.0091647
-    ###Tests detect host galaxies with pixel coords
-    SkyImageClassInstance.detect_host_galaxies()
-    assert(len(SkyImageClassInstance.hostgalaxies) >= 1)
-    
-    ##Make sure that target galaxy is flagged
-    target = False
-    for i in SkyImageClassInstance.hostgalaxies:
-        if np.sqrt( (i['x'].value - pixel_x) ** 2 + (i['y'].value - pixel_y) ** 2 ) < 10:
-            target = True
-    
-    assert(target)
-def test_diffimageml():
-    if _GOFAST_:
-        print("GO FAST!  SKIPPING SLOW TESTS")
-    failed=0
-    total=0
-    skipped=0
-    # Fill in tests here.  Put a separate try/except around each test and track
-    # the count of total tests and failures
-    try:
-        print('Testing pristine data...', end='')
-        total += 1
-        test_pristine_data()
-        print("Passed!")
-    except Exception as e:
-        print('Failed')
-        print(traceback.format_exc())
-        failed+=1
-
-    try:
-        FitsImage_Instance = None
-        print('Testing FitsImage instantiation...', end='')
-        total += 1
-        FitsImage_Instance = test_FitsImageClass()
-        print("Passed!")
-    except Exception as e:
-        print('Failed')
-        print(traceback.format_exc())
-        failed+=1
-
-
-    try:
         if not _GOFAST_:
-            print('Testing Gaia astroquery...', end='')
-            total += 1
-            test_fetch_gaia_sources()
-            print("Passed Gaia astroquery!")
-        else:
-            skipped += 1
-    except Exception as e:
-        print('Failed Gaia astroquery')
-        print(traceback.format_exc())
-        failed+=1
+            self.FitsImageClassInstance.detect_sources()
 
-    try:
-        print('Testing get photometry of known stars...', end='')
-        total += 1
-        test_photometry_of_stars()
-        print("Passed stellar photometry measurement!")
-    except Exception as e:
-        print('Failed stellar photometry measurement')
-        print(traceback.format_exc())
-        failed+=1
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_source_detection`")
+    def test_source_detection(self):
+        return FitsImageTest.has_detections()
 
-    try:
-        print('Testing measure the zeropoint from known stars...', end='')
-        total += 1
-        test_measure_zeropoint()
-        print("Passed zeropoint measurement!")
-    except Exception as e:
-        print('Failed zeropoint measurement')
-        print(traceback.format_exc())
-        failed+=1
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_detection_efficiency`")
+    def test_detection_efficiency(self):
+        eff,eff_table = self.FakePlanterClassInstance.calculate_detection_efficiency(
+                        source_catalog=self.FitsImageClassInstance.sourcecatalog)
+        self.assertTrue(type(eff)==float)
+        self.assertTrue(len(eff_table)>0)
 
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_host_galaxy_detection`")
+    def test_host_galaxy_detection(self):
+        pixel_x = 2012
+        pixel_y = 2056
+        ra = 17.3905276
+        dec = 15.0091647
+        ###Tests detect host galaxies with pixel coords
+        self.FitsImageClassInstance.detect_host_galaxies()
+        self.assertTrue(len(self.FitsImageClassInstance.hostgalaxies) >= 1)
+        
+        ##Make sure that target galaxy is flagged
+        target = False
+        for i in self.FitsImageClassInstance.hostgalaxies:
+            if np.sqrt( (i['x'].value - pixel_x) ** 2 + (i['y'].value - pixel_y) ** 2 ) < 10:
+                target = True
+        
+        self.assertTrue(target)
 
-    try:
-        if not _GOFAST_:
-            print('Testing ePSF model construction...', end='')
-            total += 1
-            test_build_epsf_model()
-            print("Passed ePSF model construction!")
-        else:
-            skipped += 1
-    except Exception as e:
-        print('Failed  ePSF model construction :(')
-        print(traceback.format_exc())
-        failed+=1
-
-    try:
-        print('Testing FakePlanter instantiation...', end='')
-        total += 1
-        test_fakeplanter_class()
-        print("Passed FakePlanter instantiation!")
-    except Exception as e:
-        print('Failed FakePlanter instantiation')
-        print(traceback.format_exc())
-        failed+=1
-
-    try:
-        if not _GOFAST_:
-            print('Testing FakePlanter planting...', end='')
-            total += 1
-            test_fakeplanter(accuracy=0.05)
-            print("Passed  FakePlanter planting!")
-        else:
-            skipped += 1
-
-    except Exception as e:
-        print('Failed  FakePlanter planting')
-        print(traceback.format_exc())
-        failed+=1
+    def tearDown(self):
+        self.FitsImageClassInstance.hdulist.close()
 
 
-    try:
-        if not _GOFAST_:
-            print('Testing SourceDetection...', end='')
-            total += 1
-            if FitsImage_Instance is not None:
-                detected = test_source_detection(FitsImage_Instance)
-            else:
-                detected = test_source_detection(diffimageml.FitsImage(_SEARCHIM1_))
-            if not detected:
-                raise RuntimeError("Source detection successful, but no catalog found.")
-            print("Passed source detection!")
-        else:
-            skipped += 1
-    except Exception as e:
-        print('Failed source detection')
-        print(traceback.format_exc())
-        failed+=1
+def test_loader(loader):
+    suite = unittest.TestSuite()
+    for test_class in test_cases:
+        tests = loader.loadTestsFromTestCase(test_class)
+        suite.addTests(tests)
+    return suite
 
-    try:
-        if not _GOFAST_:
-            print ("Testing Host Galaxy Detection...", end='')
-            total += 1
-            test_host_galaxy_detection(Image=FitsImage_Instance)
-            print ("Passed host galaxy detection!")
-        else:
-            skipped += 1
-    except Exception as e:
-        print('Failed host galaxy detection')
-        print(traceback.format_exc())
-        failed += 1
-
-    try:
-        if not _GOFAST_:
-            print ("Testing Efficiency Calculation...", end='')
-            total += 1
-            test_detection_efficiency()
-            print ("Passed Efficiency Calculation!")
-        else:
-            skipped += 1
-    except Exception as e:
-        print('Failed Efficiency Calculation')
-        print(traceback.format_exc())
-        failed += 1
-    
-    if _GOFAST_:
-        print('Passed %i/%i tests, skipped %i slow tests.'%(total-failed,total,skipped))
-    else:
-        print('Passed %i/%i tests.'%(total-failed,total))
-
-    return
 
 if __name__ == '__main__':
-    test_diffimageml()
+    #TEST LIST
+    #test_cases = 'ALL'
+    test_cases = [TestDataExistence,TestFitsImage]
+
+    if test_cases == 'ALL':
+        unittest.main()
+    else:
+        runner = unittest.TextTestRunner()
+        runner.run(test_loader(unittest.TestLoader()))

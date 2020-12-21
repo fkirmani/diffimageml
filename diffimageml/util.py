@@ -14,6 +14,32 @@ from photutils.datasets import make_gaussian_sources_image
 
 import itertools
 
+def get_example_data():
+    """Returns a dict with the filepath for each of the input images used
+    as example data"""
+    example_data = {}
+    example_data['dir'] = os.path.abspath(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),'test_data'))
+    example_data['diffim1'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'diff_pydia_1.fits.fz'))
+    example_data['fakediffim1'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'diff_pydia_1_fakegrid.fits'))
+    example_data['searchim1'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'sky_image_1.fits.fz'))
+    example_data['templateim1'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'template_1.fits.fz'))
+
+    example_data['diffim2'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'diff_pydia_2.fits.fz'))
+    example_data['fakediffim2'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'diff_pydia_2_fakegrid.fits'))
+    example_data['searchim2'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'sky_image_2.fits.fz'))
+    example_data['templateim2'] = os.path.abspath(os.path.join(
+        example_data['dir'], 'template_2.fits.fz'))
+
+    return example_data
+
 
 def pixtosky(self,pixel):
     """
@@ -133,7 +159,7 @@ def lco_epsf(self):
 
     return epsf
 
-def _extract_psf_fitting_names(psf):
+def extract_psf_fitting_names(psf):
     """
     Determine the names of the x coordinate, y coordinate, and flux from
     a model.  Returns (xname, yname, fluxname)
@@ -163,6 +189,8 @@ def _extract_psf_fitting_names(psf):
         raise ValueError('Could not determine flux name for psf_photometry.')
 
     return xname, yname, fluxname
+
+
 
 def add_psf(self, psf, posflux, subshape=None,writetodisk=False,saveas="planted.fits"):
     """

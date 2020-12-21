@@ -15,7 +15,7 @@ import copy
 
 def plant_unit_test(self,accuracy=0.05):
     # unit test
-    planthdu = self.plant_fakes
+    planthdu = self.plant_fakes_in_sci
     hdu = self.hdu
 
     fitsflux = np.sum(planthdu.data - hdu.data)
