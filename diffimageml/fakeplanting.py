@@ -14,6 +14,8 @@ from astropy.stats import (sigma_clip, sigma_clipped_stats,
                            gaussian_fwhm_to_sigma,gaussian_sigma_to_fwhm)
 from astropy.table import Table,Column,MaskedColumn,Row,vstack,setdiff,join
 from astropy.wcs import WCS, utils as wcsutils
+from astropy.visualization import ZScaleInterval,simple_norm
+zscale = ZScaleInterval()
 
 import photutils
 from photutils.datasets import make_gaussian_sources_image
@@ -29,11 +31,13 @@ import itertools
 import copy
 import pickle
 
+import matplotlib
 from matplotlib import pyplot as plt, cm
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 #local
-from .util import *
+from util import *
+#from .util import *
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
@@ -203,14 +207,14 @@ class FitsImage:
         # bkg also available in the hdr of file, either way is fine  
         # threshold = detect_threshold(hdu.data, nsigma=nsigma)
         # or you can provide a bkg of the same shape as data and this will be used
-        boxsize=100
+        boxsize=200
         bkg = Background2D(self.sci.data,boxsize) # sigma-clip stats for background est over image on boxsize, regions interpolated to give final map 
         threshold = detect_threshold(self.sci.data, nsigma=nsigma,background=bkg.background)
         ksigma = kfwhm * gaussian_fwhm_to_sigma  # FWHM pixels for kernel smoothing
         # optional ~ kernel smooths the image, using gaussian weighting
         kernel = Gaussian2DKernel(ksigma)
         kernel.normalize()
-        # make a segmentation map, id sources defined as n connected pixels above threshold (n*sigma + bkg)
+        # make a segmentation map, id sources defined as n connected pixels above threshold 
         segm = detect_sources(self.sci.data,
                               threshold, npixels=npixels, filter_kernel=kernel)
         # deblend useful for very crowded image with many overlapping objects...
@@ -248,7 +252,7 @@ class FitsImage:
         return self.sourcecatalog
     
 
-    def detect_host_galaxies(self , ellipticity_cut = 0.35 , cut_cr = True ,**kwargs):
+    def detect_host_galaxies(self , ellipticity_cut = 0.35 , cut_cr = True , edges = True,**kwargs):
         """Detect sources  in the sky image using the astropy.photutils threshold-based
          source detection algorithm to get data on the host galaxies. Will attempt to identify
          the galaxies in the image
@@ -262,6 +266,8 @@ class FitsImage:
         
         cur_cr : boolean : If true, performs an additional cut on the number of pixels in the source
         in order to reduce the number of artifacts that get flagged as galaxies.
+
+        edges: boolean : Default true, performs a cut of sources detected nearby the edges of image  
             
         Returns
         -------
@@ -272,12 +278,17 @@ class FitsImage:
         xcol = []
         ycol = []
         source_propertiescol = []
+        shape = self.sci.data.shape
         
         if not self.has_detections:
             self.detect_sources(**kwargs)
         for i in self.sourcecatalog:
             if i.ellipticity > 0.35: ##Identifies Galaxies
                 if i.area.value < 8 and cut_cr: ##Removes cosmic rays
+                    continue
+                if i.centroid[1].value < 50 or i.centroid[0].value < 50 and edges: ##Removes objects next to edges
+                    continue
+                if i.centroid[1].value > shape[0] - 50 or i.centroid[0].value > shape[1] - 50 and edges:
                     continue
                 xcol.append(i.centroid[1])
                 ycol.append(i.centroid[0])
@@ -1333,11 +1344,11 @@ class FakePlanter:
         # Apply the offsets to get the x,y locations where the fakes
         # will go (separately for each image in the triplet)
         xfake_temp = x_template + delta_x
-        yfake_temp = x_template + delta_y
+        yfake_temp = y_template + delta_y
         xfake_search = x_search + delta_x
-        yfake_search = x_search + delta_y
+        yfake_search = y_search + delta_y
         xfake_diff = x_diff + delta_x
-        yfake_diff = x_diff + delta_y
+        yfake_diff = y_diff + delta_y
 
         # if user doesn't provide a list of fluxes, set all as a constant flux
         # TODO : set this to a constant mag, when the zeropoint is defined?
@@ -1345,22 +1356,129 @@ class FakePlanter:
             fluxes = [10**3 for i in range(Nfakes)]
 
         # put into table ready for entry as photutils subtract_psf posflux arg
+        meta = {"phi_deg":phi_deg,"d_pix":d_pix,"galaxy_indices":galaxy_indices,"delta_x":delta_x,"delta_y":delta_y}
         posflux_template = Table(data=[xfake_temp, yfake_temp, fluxes],
-                                 names=["x_fit", "y_fit", "flux_fit"],)
+                                 names=["x_fit", "y_fit", "flux_fit"],meta=meta)
         posflux_search = Table(data=[xfake_search, yfake_search, fluxes],
-                               names=["x_fit", "y_fit", "flux_fit"])
+                               names=["x_fit", "y_fit", "flux_fit"],meta=meta)
         posflux_diff = Table(data=[xfake_diff, yfake_diff, fluxes],
-                             names=["x_fit", "y_fit", "flux_fit"])
-        
+                             names=["x_fit", "y_fit", "flux_fit"],meta=meta)
+            
         self.templateim.lensed_locations = posflux_template
         self.searchim.lensed_locations = posflux_search
         self.diffim.lensed_locations = posflux_diff
 
         return [posflux_diff,posflux_search,posflux_template]
 
+    def plot_lensed_locations(self,writetodisk=False,saveas="lensed_locations.pdf"):
+        """
+        mpl figure showing cutout on host galaxy with ellipse, and lensed locations
+        cutout taken from template image
+        """
+        
+        try:
+            assert(self.templateim is not None)
+        except assertionerror:
+            print("No template image. Provide a templateim_fitsfilename to FakePlanter")
+            return
+
+        try: 
+            assert(self.templateim.hostgalaxies is not None)
+        except assertionerror:
+            print("No hostgalaxies. Run detect_host_galaxies()")
+            
+        try:
+            assert(self.templateim.lensed_locations is not None)
+        except assertionerror:
+            print("No lensed locations. Run set_fake_positions_at_galaxies()")
+        
+        # the host's detect_sources properties
+        hostgalaxies = self.templateim.hostgalaxies
+
+        # the lensed locations
+        lensed_locations = self.templateim.lensed_locations
+        galaxy_indices = lensed_locations.meta['galaxy_indices']
+        delta_x = lensed_locations.meta['delta_x'].value
+        delta_y = lensed_locations.meta['delta_y'].value
+        phi_deg = lensed_locations.meta['phi_deg']
+        d_pix = lensed_locations.meta['d_pix']
+        
+        # TODO this selection of which galaxy we want to plot could be more general...
+        # just taking the first galaxy which is where quad lensed location is set in this nb example
+        galaxy_idx = galaxy_indices[0]
+        hostgalaxy = hostgalaxies[galaxy_idx]["Source Properties"].to_table()
+        
+        # cut hdu
+        x = hostgalaxy["xcentroid"][0].value # pix
+        y = hostgalaxy["ycentroid"][0].value # pix
+        location = (x,y)
+        size = 50
+        cut = cut_hdu(self.templateim,location,size)
+        # when placing patch with ellipse on the cut, it is centered on location of the hostgalaxy
+        cut_xy = (size/2,size/2)
+
+        #xtheta ytheta defined analytically for segm image using variance then partial theta ~ 0 gives an ellipse 
+        a = hostgalaxy["semimajor_axis_sigma"][0].value # pix
+        b = hostgalaxy["semiminor_axis_sigma"][0].value # pix
+        orientation = hostgalaxy["orientation"][0].value # deg a-axis ccw from +x
+        
+        # patches for lensing galaxy
+        # usually isophotal limit well represented by R ~ 3
+        R = 3
+        # mpl ellipse patch wants ctr in pixels, width and height as full lengths along image x,y
+        # angle is rotation in deg ccw of semimajor ~ a with respect to +x 
+        width = R*2*a 
+        height = R*2*b 
+        ellipse = matplotlib.patches.Ellipse(cut_xy,width,height,angle=orientation,fill=None)
+        # mpl arrow patch wants x,y tail starts, dx,dy, tail lengths
+        ga_dx = 10*np.cos(orientation*np.pi/180)
+        ga_dy = 10*np.sin(orientation*np.pi/180)
+        gal_arrow = matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],ga_dx,ga_dy,width=1.0,color='black')
+        ga_x,ga_y = cut_xy[0]+ga_dx,cut_xy[1]+ga_dy
+        # mpl arc patch wants xy ctr, width/height lenths of horizontal/vertical axes, 
+        # angle deg ccw +x, theta1 and theta2 ccw from angle 
+        gal_arcsize=5
+        gal_arc = matplotlib.patches.Arc(cut_xy,gal_arcsize,gal_arcsize,angle=0,theta1=0,theta2=orientation)
+        
+        # patches for SN lensed locations
+        circles,arrows,arcs = [],[],[]
+        colors = ['red','blue','green','orange'] # four colors should be enough, no more than quad SN on galaxy
+        arcsize = gal_arcsize + 2
+        for i in range(len(lensed_locations)):
+            xy = (cut_xy[0]+delta_x[i],cut_xy[1]+delta_y[i])
+            circles.append(matplotlib.patches.Circle(xy,radius=3,fill=None,color=colors[i]))
+            arrows.append(matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],delta_x[i],delta_y[i],color=colors[i]))
+            arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation,theta1=0,theta2=phi_deg[i],color=colors[i]))
+            arcsize += 2
+            
+        # get to plotting
+        fig,ax=plt.subplots(figsize=(10,10))
+        ax.imshow(zscale(cut.data),origin='lower')
+        ax.add_patch(ellipse) # ellipse a little questionable at the moment, mpl patch is vague on orientation 
+        ax.add_patch(gal_arrow)
+        ax.add_patch(gal_arc)
+        bbox,fontsize=dict(facecolor='white', alpha=0.5),12
+        plt.text(ga_x,ga_y,r'$\theta = {:.1f}$'.format(orientation),bbox=bbox,fontsize=fontsize)
+
+        for i in range(len(lensed_locations)):
+            ax.add_patch(circles[i])
+            ax.add_patch(arrows[i])
+            ax.add_patch(arcs[i])
+            xy = (cut_xy[0]+delta_x[i],cut_xy[1]+delta_y[i])
+            plt.text(xy[0],xy[1],'$\phi = {:.1f}, $ \n $d = {:.1f} $'.format(phi_deg[i],d_pix[i]),bbox=bbox,fontsize=fontsize)
+            
+        # show the hline of +x axis which is what ellipse orientation from detect_sources is relative to
+        plt.hlines(cut_xy[1],0,size,colors='black',linestyles='--')
+        plt.xlim(0,size)
+        plt.ylim(0,size)
+        plt.show()
+        if writetodisk:
+            plt.savefig(saveas,bbox_inches="tight")
+        return
+
 
     def plant_fakes_triplet(self, posfluxtable, psfmodel='epsf',
-                            writetodisk=False, save_suffix="withfakes"):
+                            writetodisk=False, save_suffix="withfakes",**kwargs):
         """Function for planting fake stars in the diff image and the search
         image.  Using the ePSF model defined by the search image, adds fake
         PSFs at the x,y pixel positions and flux scales given in posfluxtable.
@@ -1400,34 +1518,13 @@ class FakePlanter:
         if type(psfmodel) is str:
             psfmodel = self.searchim.__getattribute__(psfmodel)
 
-        self.diffim.plant_fakes_in_sci(psfmodel, posfluxtable[0])
-        self.searchim.plant_fakes_in_sci(psfmodel, posfluxtable[1])
+        self.diffim.plant_fakes_in_sci(psfmodel, posfluxtable[0],**kwargs)
+        self.searchim.plant_fakes_in_sci(psfmodel, posfluxtable[1],**kwargs)
 
         # TODO : add writing to disk
         if writetodisk:
             print("Oops. We haven't written this yet.")
         return
-
-
-    def added_triplet(self,epsf,posfluxes):
-        """
-        Function for add_psf using epsf and posfluxes to the triplet of three FITS files that hold
-        A. a difference image
-        B. a 'search' image (typically a "new" single-epoch static sky image)
-        C. the template image (or 'reference')
-
-        The triplet remains unchanged, access to the planted for each available as self.im.plants
-        Returns list [self.diffim.plants,self.searchim.plants,self.templateim.plants] 
-        """
-
-        # TODO could also use self.im.lensed_locations
-        # posfluxes needs to be generalized more carefully
-        # posfluxes assuming list of posflux returned as diff,search,template 
-        diffplants = self.diffim.plant_fakes_in_sci(epsf, posfluxes[0])
-        searchplants = self.searchim.plant_fakes_in_sci(epsf, posfluxes[1])
-        templateplants = self.templateim.plant_fakes_in_sci(epsf, posfluxes[2])
-
-        return [diffplants,searchplants,templateplants]
 
 
     def plot_fakes(self, fake_indices, cutoutsize=50):
@@ -1487,40 +1584,99 @@ class FakePlanter:
 
         return
 
-
-    def make_postage_stamp_triplets(self, location, size):
+    def plants_MEF(self,fake_indices,cutoutsize=50,writetodisk=False,saveas='test.fits'):
         """
-        Function for making postage stamps at given location and size for the triplet of three FITS files that hold
-        A. a difference image
-        B. a 'search' image (typically a "new" single-epoch static sky image)
-        C. the template image (or 'reference')
+        Create MEF Fits file ~ triplet of cutouts around planted FKnnn sources  
+        primary data empty, primary header has FKnnn indicating which cutout
+        returns list like with MEF for each of the list like FKnnn fake_indices provided 
+            
+        A. a difference image, has plant
+        B. a 'search' image (typically a "new" single-epoch static sky image), has plant
+        C. the template image (or 'reference'), does not have plant
+        
+        Parameters
+        ----------
+        fake_indices : List-like
+            indices for the fake sources, corresponding to the 'FKnnnX' and
+            'FKnnnY' cards (and associated) that were written into the header
+            of the 'sci' image for the diffim and/or searchim FitsImage objects
 
-        The triplet remains unchanged, access to the postage stamp for each pristine data available as self.im.postage_stamp
-        or for the added_psf triplet as self.im.plants.postage_stamp
-        Returns list [[self.diffim.plants,self.searchim.plants,self.templateim.plants],
-                    [diffim.plants.postage_stamp,searchim.plants.postage_stamp,templatim.plants.postage_stamp]] 
+        cutoutsize : int
+            number of pixels on a side for the image to be shown. We cut it in
+            half and use the integer component, so if an odd number or float is
+            provided it is rounded down to the preceding integer.
+            
+        TODO: FP_MEF ~ Allow MEF for false positives. Add cards like FPnnnX FPnnnY to headers? 
         """
-        diffim = self.diffim
-        searchim = self.searchim
-        templateim = self.templateim
+        
+        # assert have A,B,C
+        try:
+            assert(self.diffim is not None)
+        except assertionerror:
+            print("No difference image. Provide a differenceim_fitsfilename to FakePlanter")
+            return
+        try:
+            assert(self.searchim is not None)
+        except assertionerror:
+            print("No search image. Provide a searchim_fitsfilename to FakePlanter")
+            return
+        try:
+            assert(self.templateim is not None)
+        except assertionerror:
+            print("No template image. Provide a templateim_fitsfilename to FakePlanter")
+            return
+        
+        # assert A,B have fakes
+        try:
+            assert(self.diffim.has_fakes==True)
+        except:
+            print("No fakes in difference image. Try to run plant_fakes_triplet()")
+        try:
+            assert(self.searchim.has_fakes==True)
+        except:
+            print("No fakes in search image. Try to run plant_fakes_triplet()")
+        
+        # the search/diff locations will use their corresponding pixel locations for this sky location
+        # needs to be included in the case that search or diff isn't sized the same as template
+        # template doesn't have associated FKNNNX/Y locations since not planting to template
+        template_wcs = self.templateim.wcs
+        search_wcs = self.searchim.wcs
+        diff_wcs = self.diffim.wcs
 
-        # [0] is the hdu with added data and updated header,
-        # [1] would be the posfluxes (available in the hdrs)
-        diffplant = diffim.plants[0]
-        searchplant = searchim.plants[0]
-        templateplant = templateim.plants[0]
+        nfakes = len(fake_indices)
+        
+        MEFS = []
+        for i, idx in zip(range(nfakes), fake_indices):
+            
+            # get the fake x,y locations
+            xdiff = self.diffim.sci.header[ f'FK{idx:03d}X' ]
+            ydiff = self.diffim.sci.header[ f'FK{idx:03d}Y' ]
+            diff_location = (xdiff,ydiff)
+            xsearch = self.searchim.sci.header[ f'FK{idx:03d}X' ]
+            ysearch = self.searchim.sci.header[ f'FK{idx:03d}Y' ]
+            search_location = (xsearch,ysearch)
+            sky_location = wcsutils.pixel_to_skycoord(
+                xsearch, ysearch, search_wcs)
+            template_location = wcsutils.skycoord_to_pixel(sky_location,template_wcs)
+            x_template,y_template = template_location
+            # and flux
+            flux = self.diffim.sci.header[ f'FK{idx:03d}F' ]
+            
+            # grab cutouts
+            cutdiff = cut_hdu(self.diffim,diff_location,cutoutsize)
+            cutsearch = cut_hdu(self.searchim,search_location,cutoutsize)
+            cuttemp = cut_hdu(self.templateim,template_location,cutoutsize)
+            
+            # create MEF
+            primary = fits.PrimaryHDU(data=None,header=None)
+            primary.header["Author"] = "Kyle OConnor"
+            primary.header["MEF"] = f'FK{idx:03d}'
+            new_hdul = fits.HDUList([primary, self.diffim.postage_stamp,self.searchim.postage_stamp,self.templateim.postage_stamp])
+            if writetodisk:
+                new_hdul.writeto(saveas, overwrite=True)
+            MEFS.append(new_hdul)
 
-        diff_ps = cut_hdu(diffim,location,size)
-        search_ps = cut_hdu(searchim,location,size)
-        template_ps = cut_hdu(templateim,location,size)
-        clean_ps = [diff_ps,search_ps,template_ps]
-
-        diffplant_ps = cut_hdu(diffplant,location,size)
-        searchplant_ps = cut_hdu(searchplant,location,size)
-        templateplant_ps = cut_hdu(templateplant,location,size)
-        added_ps = [diffplant_ps,searchplant_ps,templateplant_ps]
-
-        return [clean_ps,added_ps]
+        return MEFS
 
     def has_fakes(self):
         """Check if fake stars have been planted in the image"""
