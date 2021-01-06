@@ -1375,6 +1375,7 @@ class FakePlanter:
         mpl figure showing cutout on host galaxy with ellipse, and lensed locations
         cutout taken from template image
         """
+        print("hello should be going grey")
         
         try:
             assert(self.templateim is not None)
@@ -1453,7 +1454,7 @@ class FakePlanter:
             
         # get to plotting
         fig,ax=plt.subplots(figsize=(10,10))
-        ax.imshow(zscale(cut.data),origin='lower')
+        ax.imshow(zscale(cut.data),origin='lower',cmap=cm.Greys)
         ax.add_patch(ellipse) # ellipse a little questionable at the moment, mpl patch is vague on orientation 
         ax.add_patch(gal_arrow)
         ax.add_patch(gal_arc)
