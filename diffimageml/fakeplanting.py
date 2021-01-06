@@ -1392,6 +1392,10 @@ class FakePlanter:
         except assertionerror:
             print("No lensed locations. Run set_fake_positions_at_galaxies()")
         
+        # going to draw patches of arcs showing explicitly what phi,d are w respect to on a galaxy
+        # setting the arc_lw 
+        arc_lw = 6
+
         # the host's detect_sources properties
         hostgalaxies = self.templateim.hostgalaxies
 
@@ -1433,12 +1437,12 @@ class FakePlanter:
         # mpl arrow patch wants x,y tail starts, dx,dy, tail lengths
         ga_dx = 10*np.cos(orientation*np.pi/180)
         ga_dy = 10*np.sin(orientation*np.pi/180)
-        gal_arrow = matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],ga_dx,ga_dy,width=1.0,color='black')
+        gal_arrow = matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],ga_dx,ga_dy,width=1.0,color='white')
         ga_x,ga_y = cut_xy[0]+ga_dx,cut_xy[1]+ga_dy
         # mpl arc patch wants xy ctr, width/height lenths of horizontal/vertical axes, 
         # angle deg ccw +x, theta1 and theta2 ccw from angle 
         gal_arcsize=5
-        gal_arc = matplotlib.patches.Arc(cut_xy,gal_arcsize,gal_arcsize,angle=0,theta1=0,theta2=orientation)
+        gal_arc = matplotlib.patches.Arc(cut_xy,gal_arcsize,gal_arcsize,angle=0,theta1=0,theta2=orientation,color='white',lw=arc_lw)
         
         # patches for SN lensed locations
         circles,arrows,arcs = [],[],[]
@@ -1448,12 +1452,16 @@ class FakePlanter:
             xy = (cut_xy[0]+delta_x[i],cut_xy[1]+delta_y[i])
             circles.append(matplotlib.patches.Circle(xy,radius=3,fill=None,color=colors[i]))
             arrows.append(matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],delta_x[i],delta_y[i],color=colors[i]))
-            arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation,theta1=0,theta2=phi_deg[i],color=colors[i]))
+            if phi_deg[i] > 0:
+                arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation,theta1=0,theta2=phi_deg[i],color=colors[i],lw=arc_lw))
+            else:
+                arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation+phi_deg[i],theta1=0,theta2=np.abs(phi_deg[i]),color=colors[i],lw=arc_lw))
+
             arcsize += 2
             
         # get to plotting
         fig,ax=plt.subplots(figsize=(10,10))
-        ax.imshow(zscale(cut.data),origin='lower')
+        ax.imshow(zscale(cut.data),origin='lower',cmap=cm.Greys)
         ax.add_patch(ellipse) # ellipse a little questionable at the moment, mpl patch is vague on orientation 
         ax.add_patch(gal_arrow)
         ax.add_patch(gal_arc)
@@ -1584,7 +1592,7 @@ class FakePlanter:
 
         return
 
-    def plants_MEF(self,fake_indices,cutoutsize=50,writetodisk=False,saveas='test.fits'):
+    def plants_MEF(self,fake_indices,cutoutsize=50,writetodisk=False,saveas=None):
         """
         Create MEF Fits file ~ triplet of cutouts around planted FKnnn sources  
         primary data empty, primary header has FKnnn indicating which cutout
@@ -1605,8 +1613,6 @@ class FakePlanter:
             number of pixels on a side for the image to be shown. We cut it in
             half and use the integer component, so if an odd number or float is
             provided it is rounded down to the preceding integer.
-            
-        TODO: FP_MEF ~ Allow MEF for false positives. Add cards like FPnnnX FPnnnY to headers? 
         """
         
         # assert have A,B,C
@@ -1673,7 +1679,97 @@ class FakePlanter:
             primary.header["MEF"] = f'FK{idx:03d}'
             new_hdul = fits.HDUList([primary, self.diffim.postage_stamp,self.searchim.postage_stamp,self.templateim.postage_stamp])
             if writetodisk:
-                new_hdul.writeto(saveas, overwrite=True)
+                new_hdul.writeto(f'FK{idx:03d}.fits', overwrite=True)
+            MEFS.append(new_hdul)
+
+        return MEFS
+
+    def FP_MEF(self,false_positives = None,cutoutsize=50,writetodisk=False,saveas=None):
+        """
+        Create MEF Fits file ~ triplet of cutouts around false_positives 
+        primary data empty, primary header has FPX and FPY indicating which cutout on diff
+        returns list like with MEF for each false positives in row of the Table like provided 
+            
+        A. a difference image, has plants
+        B. a 'search' image (typically a "new" single-epoch static sky image), has plants
+        C. the template image (or 'reference'), does not have plants
+        
+        Parameters
+        ----------
+        false_positives : Astropy Table
+            detected source catalog complete with photometry (detect_sources on clean diff not the planted)
+
+        cutoutsize : int
+            number of pixels on a side for the image to be shown. We cut it in
+            half and use the integer component, so if an odd number or float is
+            provided it is rounded down to the preceding integer.
+        """
+        
+        if false_positives == None:
+            false_positives = self.find_false_positives(edges=True)
+        
+        # assert have A,B,C
+        try:
+            assert(self.diffim is not None)
+        except assertionerror:
+            print("No difference image. Provide a differenceim_fitsfilename to FakePlanter")
+            return
+        try:
+            assert(self.searchim is not None)
+        except assertionerror:
+            print("No search image. Provide a searchim_fitsfilename to FakePlanter")
+            return
+        try:
+            assert(self.templateim is not None)
+        except assertionerror:
+            print("No template image. Provide a templateim_fitsfilename to FakePlanter")
+            return
+        
+        # assert A,B have fakes
+        try:
+            assert(self.diffim.has_fakes==True)
+        except:
+            print("No fakes in difference image. Try to run plant_fakes_triplet()")
+        try:
+            assert(self.searchim.has_fakes==True)
+        except:
+            print("No fakes in search image. Try to run plant_fakes_triplet()")
+        
+        # the search/diff locations will use their corresponding pixel locations for this sky location
+        # needs to be included in the case that search or diff isn't sized the same as template
+        # template doesn't have associated FKNNNX/Y locations since not planting to template
+        template_wcs = self.templateim.wcs
+        search_wcs = self.searchim.wcs
+        diff_wcs = self.diffim.wcs
+        
+        MEFS = []
+        for i in range(len(false_positives)):
+            
+            # get the fake x,y locations
+            xdiff = false_positives[i]['x']
+            ydiff = false_positives[i]['y']
+            diff_location = (xdiff,ydiff)
+            sky_location = wcsutils.pixel_to_skycoord(
+                xdiff, ydiff, diff_wcs)
+            search_location = wcsutils.skycoord_to_pixel(sky_location,search_wcs)
+            xsearch,ysearch = search_location
+            template_location = wcsutils.skycoord_to_pixel(sky_location,template_wcs)
+            x_template,y_template = template_location
+            # and mag
+            mag = false_positives[i]['mag']
+            
+            # grab cutouts
+            cutdiff = cut_hdu(self.diffim,diff_location,cutoutsize)
+            cutsearch = cut_hdu(self.searchim,search_location,cutoutsize)
+            cuttemp = cut_hdu(self.templateim,template_location,cutoutsize)
+            
+            # create MEF
+            primary = fits.PrimaryHDU(data=None,header=None)
+            primary.header["Author"] = "Kyle OConnor"
+            primary.header["MEF"] = f'FP{i:03d}'
+            new_hdul = fits.HDUList([primary, self.diffim.postage_stamp,self.searchim.postage_stamp,self.templateim.postage_stamp])
+            if writetodisk:
+                new_hdul.writeto(f'FP{i:03d}.fits', overwrite=True)
             MEFS.append(new_hdul)
 
         return MEFS
@@ -1753,7 +1849,7 @@ class FakePlanter:
 
         self.plant_detections = Table([x , y , detect , magnitudes] , names = ('x','y','detect' , 'mag'))
 
-    def find_false_positives(self , clean_diff = None):
+    def find_false_positives(self , clean_diff = None, edges = False):
         """
         Runs aperture photometry on the false positives.
 
@@ -1761,8 +1857,8 @@ class FakePlanter:
         ----------
         clean_diff : If None, will use self.diffim. Otherwise should be a FitsImage object
             containing a clean difference image corresponding to self.searchim
-
-
+        edges: If False,will return all detected sources. Otherwise if True will exclude objects 
+            having ctr that is within 50 pixels of an edge (ie ignore edge effects and restricts to useful FP to cutout for training ML).
 
         Returns
         -------
@@ -1775,6 +1871,7 @@ class FakePlanter:
         if not clean_diff:
             clean_diff = self.diffim
 
+        shape = clean_diff.sci.data.shape
 
         ##radius for matching sources across catalogs
         pixscale = clean_diff.sci.header["PIXSCALE"]
@@ -1803,6 +1900,12 @@ class FakePlanter:
         for i in clean_diff.sourcecatalog.to_table():
             xcenter = i["xcentroid"].value
             ycenter = i["ycentroid"].value
+
+            if xcenter < 50 or ycenter < 50 and edges: ##Removes objects next to edges
+                continue
+            if xcenter > shape[0] - 50 or ycenter > shape[1] - 50 and edges:
+                continue
+
             x.append(xcenter)
             y.append(ycenter)
             found = False
