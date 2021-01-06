@@ -1375,7 +1375,6 @@ class FakePlanter:
         mpl figure showing cutout on host galaxy with ellipse, and lensed locations
         cutout taken from template image
         """
-        print("hello should be going grey")
         
         try:
             assert(self.templateim is not None)
@@ -1393,6 +1392,10 @@ class FakePlanter:
         except assertionerror:
             print("No lensed locations. Run set_fake_positions_at_galaxies()")
         
+        # going to draw patches of arcs showing explicitly what phi,d are w respect to on a galaxy
+        # setting the arc_lw 
+        arc_lw = 6
+
         # the host's detect_sources properties
         hostgalaxies = self.templateim.hostgalaxies
 
@@ -1434,12 +1437,12 @@ class FakePlanter:
         # mpl arrow patch wants x,y tail starts, dx,dy, tail lengths
         ga_dx = 10*np.cos(orientation*np.pi/180)
         ga_dy = 10*np.sin(orientation*np.pi/180)
-        gal_arrow = matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],ga_dx,ga_dy,width=1.0,color='black')
+        gal_arrow = matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],ga_dx,ga_dy,width=1.0,color='white')
         ga_x,ga_y = cut_xy[0]+ga_dx,cut_xy[1]+ga_dy
         # mpl arc patch wants xy ctr, width/height lenths of horizontal/vertical axes, 
         # angle deg ccw +x, theta1 and theta2 ccw from angle 
         gal_arcsize=5
-        gal_arc = matplotlib.patches.Arc(cut_xy,gal_arcsize,gal_arcsize,angle=0,theta1=0,theta2=orientation)
+        gal_arc = matplotlib.patches.Arc(cut_xy,gal_arcsize,gal_arcsize,angle=0,theta1=0,theta2=orientation,color='white',lw=arc_lw)
         
         # patches for SN lensed locations
         circles,arrows,arcs = [],[],[]
@@ -1449,7 +1452,11 @@ class FakePlanter:
             xy = (cut_xy[0]+delta_x[i],cut_xy[1]+delta_y[i])
             circles.append(matplotlib.patches.Circle(xy,radius=3,fill=None,color=colors[i]))
             arrows.append(matplotlib.patches.Arrow(cut_xy[0],cut_xy[1],delta_x[i],delta_y[i],color=colors[i]))
-            arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation,theta1=0,theta2=phi_deg[i],color=colors[i]))
+            if phi_deg[i] > 0:
+                arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation,theta1=0,theta2=phi_deg[i],color=colors[i],lw=arc_lw))
+            else:
+                arcs.append(matplotlib.patches.Arc(cut_xy,arcsize,arcsize,angle=orientation+phi_deg[i],theta1=0,theta2=np.abs(phi_deg[i]),color=colors[i],lw=arc_lw))
+
             arcsize += 2
             
         # get to plotting
