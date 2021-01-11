@@ -139,7 +139,7 @@ class TestSourceDetection(unittest.TestCase):
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_source_detection`")
     def test_source_detection(self):
-        return FitsImageTest.has_detections()
+        return self.FitsImageClassInstance.has_detections
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_detection_efficiency`")
     def test_detection_efficiency(self):
