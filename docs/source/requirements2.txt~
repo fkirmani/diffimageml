@@ -2,4 +2,3 @@ astropy
 pytest-astropy
 matplotlib
 sphinx_gallery
-pyyaml

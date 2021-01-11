@@ -1,6 +1,5 @@
 from setuptools import setup
 import os,glob,warnings,sys,fnmatch,subprocess
-from setuptools.command.test import test as TestCommand
 from distutils.core import setup
 import numpy.distutils.misc_util
 
@@ -8,13 +7,6 @@ import numpy.distutils.misc_util
 if sys.version_info < (3,0):
     sys.exit('Sorry, Python 2 is not supported')
 
-class diffimagemltest(TestCommand):
-
-   def run_tests(self):
-       import diffimageml
-       errno = diffimageml.test()
-       diffimageml.test_diffimageml()
-       sys.exit(errno)
 
 AUTHOR = 'Steve Rodney'
 AUTHOR_EMAIL = 'srodney@sc.edu'
@@ -45,9 +37,8 @@ PACKAGENAME='diffimageml'
 
 setup(
     name=PACKAGENAME,
-    cmdclass={'test': diffimagemltest},
     setup_requires='numpy',
-    install_requires=['numpy','scipy','astropy', 'pytest-astropy'],
+    install_requires=['numpy','scipy','astropy', 'pytest-astropy','pyyaml'],
     packages=[PACKAGENAME],
     version=VERSION,
     author=AUTHOR,
