@@ -11,27 +11,6 @@ Examples
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="Demonstration of planting fake PSFs in diff images to mimic strongly-lensed supernovae.">
-
-.. only:: html
-
- .. figure:: /examples/images/thumb/sphx_glr_plot_fakeplanting_thumb.png
-     :alt: Fake Source Planting
-
-     :ref:`sphx_glr_examples_plot_fakeplanting.py`
-
-.. raw:: html
-
-    </div>
-
-
-.. toctree::
-   :hidden:
-
-   /examples/plot_fakeplanting
-
-.. raw:: html
-
     <div class="sphx-glr-thumbcontainer" tooltip="Demonstration of building an ePSF model from Gaia stars in an LCO image.">
 
 .. only:: html
@@ -50,6 +29,27 @@ Examples
    :hidden:
 
    /examples/plot_epsfmodel
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="Demonstration of planting fake PSFs in diff images to mimic strongly-lensed supernovae.">
+
+.. only:: html
+
+ .. figure:: /examples/images/thumb/sphx_glr_plot_fakeplanting_thumb.png
+     :alt: Fake Source Planting
+
+     :ref:`sphx_glr_examples_plot_fakeplanting.py`
+
+.. raw:: html
+
+    </div>
+
+
+.. toctree::
+   :hidden:
+
+   /examples/plot_fakeplanting
 .. raw:: html
 
     <div class="sphx-glr-clear"></div>

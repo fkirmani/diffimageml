@@ -24,7 +24,7 @@ PSF Model Construction
 
 Demonstration of building an ePSF model from Gaia stars in an LCO image.
 
-.. GENERATED FROM PYTHON SOURCE LINES 8-36
+.. GENERATED FROM PYTHON SOURCE LINES 8-17
 
 .. code-block:: default
 
@@ -33,28 +33,9 @@ Demonstration of building an ePSF model from Gaia stars in an LCO image.
     import diffimageml
     from matplotlib import pyplot as plt
 
-
-    # Hard coding the test data filenames
-    _EXAMPLEDATADIR_ = diffimageml.get_example_data_dir()
-
-    _DIFFIM1_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'diff_pydia_1.fits.fz'))
-    _FAKEDIFFIM1_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'diff_pydia_1_fakegrid.fits'))
-    _SEARCHIM1_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'sky_image_1.fits.fz'))
-    _TEMPLATEIM1_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'template_1.fits.fz'))
-
-    _DIFFIM2_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'diff_pydia_2.fits.fz'))
-    _FAKEDIFFIM2_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'diff_pydia_2_fakegrid.fits'))
-    _SEARCHIM2_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'sky_image_2.fits.fz'))
-    _TEMPLATEIM2_ = os.path.abspath(os.path.join(
-        _EXAMPLEDATADIR_, 'template_2.fits.fz'))
-
+    # Get a dict with test data filenames
+    example_data_dict = diffimageml.get_example_data()
+    searchim1 = example_data_dict['searchim1']
 
 
 
@@ -80,7 +61,7 @@ Demonstration of building an ePSF model from Gaia stars in an LCO image.
 
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 39-53
+.. GENERATED FROM PYTHON SOURCE LINES 20-34
 
 PSF Model Construction Overview
 -------------------------------
@@ -97,13 +78,13 @@ To construct a PSF model we go through the following steps
 
 * Build an ePSF model from the Gaia stars
 
-.. GENERATED FROM PYTHON SOURCE LINES 53-57
+.. GENERATED FROM PYTHON SOURCE LINES 34-38
 
 .. code-block:: default
 
 
-    assert(os.path.isfile(_SEARCHIM1_))
-    searchim = diffimageml.FitsImage(_SEARCHIM1_)
+    assert(os.path.isfile(searchim1))
+    searchim = diffimageml.FitsImage(searchim1)
 
 
 
@@ -123,12 +104,12 @@ To construct a PSF model we go through the following steps
 
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 58-60
+.. GENERATED FROM PYTHON SOURCE LINES 39-41
 
 Fetch a catalog of stars in the image from the Gaia db
 (or read in a saved local copy)
 
-.. GENERATED FROM PYTHON SOURCE LINES 60-65
+.. GENERATED FROM PYTHON SOURCE LINES 41-46
 
 .. code-block:: default
 
@@ -157,12 +138,12 @@ Fetch a catalog of stars in the image from the Gaia db
 
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 66-68
+.. GENERATED FROM PYTHON SOURCE LINES 47-49
 
 Do photometry of the Gaia stars, within a user-specified
 magnitude range
 
-.. GENERATED FROM PYTHON SOURCE LINES 68-72
+.. GENERATED FROM PYTHON SOURCE LINES 49-53
 
 .. code-block:: default
 
@@ -184,17 +165,17 @@ magnitude range
 
  .. code-block:: none
 
-    /Users/rodney/Dropbox/src/diffimageml/diffimageml/fakeplanting.py:628: RuntimeWarning: invalid value encountered in log10
+    /Users/rodney/Dropbox/src/diffimageml/diffimageml/fakeplanting.py:592: RuntimeWarning: invalid value encountered in log10
       phot['mag'] = -2.5 * np.log10( phot['aper_sum_bkgsub'] )
 
 
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 73-74
+.. GENERATED FROM PYTHON SOURCE LINES 54-55
 
 Measure the zero point for this image from the Gaia stars
 
-.. GENERATED FROM PYTHON SOURCE LINES 74-77
+.. GENERATED FROM PYTHON SOURCE LINES 55-58
 
 .. code-block:: default
 
@@ -215,7 +196,7 @@ Measure the zero point for this image from the Gaia stars
 
  .. code-block:: none
 
-    /Users/rodney/Dropbox/src/diffimageml/diffimageml/fakeplanting.py:704: RuntimeWarning: divide by zero encountered in true_divide
+    /Users/rodney/Dropbox/src/diffimageml/diffimageml/fakeplanting.py:668: RuntimeWarning: divide by zero encountered in true_divide
       (np.abs(star_flux/star_flux_err)>20))
     /usr/local/anaconda3/envs/astroconda/lib/python3.7/site-packages/numpy/core/fromnumeric.py:748: UserWarning: Warning: 'partition' will ignore the 'mask' of the MaskedArray.
       a.partition(kth, axis=axis, kind=kind, order=order)
@@ -235,11 +216,11 @@ Measure the zero point for this image from the Gaia stars
 
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 78-79
+.. GENERATED FROM PYTHON SOURCE LINES 59-60
 
 Build an ePSF Model from the Gaia stars that are not saturated
 
-.. GENERATED FROM PYTHON SOURCE LINES 79-83
+.. GENERATED FROM PYTHON SOURCE LINES 60-64
 
 .. code-block:: default
 
@@ -261,7 +242,7 @@ Build an ePSF Model from the Gaia stars that are not saturated
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** ( 0 minutes  4.270 seconds)
+   **Total running time of the script:** ( 0 minutes  3.438 seconds)
 
 
 .. _sphx_glr_download_examples_plot_epsfmodel.py:

@@ -27,7 +27,7 @@ _SEARCHIM2_ = os.path.abspath(os.path.join(
 _TEMPLATEIM2_ = os.path.abspath(os.path.join(
     _SRCDIR_, 'diffimageml', 'test_data', 'template_2.fits.fz'))
 
-_GOFAST_ = True # Use this to skip slow tests
+_GOFAST_ = False # Use this to skip slow tests
 
 class TestDataExistence(unittest.TestCase):
     """
@@ -64,7 +64,7 @@ class TestPlanter(unittest.TestCase):
 
         # TODO: this is gonna need debugging
         pre_imdata = self.fakeplanterobject.diffim.sci.data
-        post_im = self.fakeplanterobject.plant_fakes(epsf,pixels)
+        post_im = self.fakeplanterobject.plant_fakes_triplet(epsf, pixels)
         post_imdata = post_im.data
 
         fitsflux = np.sum(post_imdata - pre_imdata)
@@ -83,13 +83,14 @@ class TestPlanter(unittest.TestCase):
 class TestFitsImage(unittest.TestCase):
     def setUp(self):
         self.FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
-        if not _GOFAST_:
-            self.FitsImageClassInstance.fetch_gaia_sources(save_suffix='TestGaiaCat')
+        # OK to run this even in _GOFAST_ mode b/c it will load a pre-baked cat
+        self.FitsImageClassInstance.fetch_gaia_sources(save_suffix='TestGaiaCat')
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_fetch_gaia_sources`")
     def test_fetch_gaia_sources(self):
         """ Check that an astroquery call to the Gaia db works"""
-        self.assertEqual(type(self.FitsImageClassInstance.gaia_source_table) == Table)
+        self.assertEqual(type(self.FitsImageClassInstance.gaia_source_table),
+                         Table)
         self.assertTrue(len(self.FitsImageClassInstance.gaia_source_table) > 0)
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_photometry_of_stars`")
@@ -111,19 +112,21 @@ class TestFitsImage(unittest.TestCase):
         self.assertTrue(self.FitsImageClassInstance.epsf.data.sum()>0)
 
         # read in the ePSF model we just created
-        self.FitsImageClassInstance.read_epsf_model(save_suffix='TestEPSFModel')
+        self.FitsImageClassInstance.load_epsfmodel_from_pickle(
+            save_suffix='TestEPSFModel')
         self.assertTrue(self.FitsImageClassInstance.epsf is not None)
         self.assertTrue(self.FitsImageClassInstance.epsf.data.sum()>0)
 
     def test_measure_zeropoint(self):
         """Check measuring of zeropoint from known stars in the image"""
-        # TODO: must also get gaia sources, but that's a separate test, should
-        #  do them in series, and pass the object along?
+        self.FitsImageClassInstance.do_stellar_photometry(
+            self.FitsImageClassInstance.gaia_source_table)
         self.FitsImageClassInstance.measure_zeropoint()
         self.assertTrue(self.FitsImageClassInstance.zeropoint is not None)
         
     def tearDown(self):
         self.FitsImageClassInstance.hdulist.close()
+
 
 class TestSourceDetection(unittest.TestCase):
     def setUp(self):
