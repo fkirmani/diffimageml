@@ -1258,6 +1258,43 @@ class FakePlanter:
         return False
 
 
+        # optional?: record pre-existing info about the image + measurements
+        # of the ePSF model in the pipeline log file: FWHM, zeropoint
+        return
+
+    def generate_lens_parameters(self,phi_func=None,d_func=None,NImage=2):
+        """
+        Generates phi and d lens parameters based on a given function or a uniform
+        distribution
+
+        Parameters
+        ----------
+        phi_func: function
+            Accepts NImage as an argument and returns an iterable of size NImage
+            containing values of phi
+        d_func: function
+            Accepts NImage as an argument and returns an iterable of size NImage
+            containing values of d
+        NImage: int
+            Number of images in the system
+
+        Returns
+        -------
+        phi,d: lists
+        """
+        
+        if phi_func is None:
+            phi = np.random.uniform(0,360,size=NImage) # TODO uniform default?
+        else:
+            phi = phi_func(NImage)
+
+        if d_func is None:
+            d = np.random.uniform(0,10,size=NImage) # TODO Make real choice about distance
+        else:
+            d = d_func(NImage)
+
+        return phi,d
+
     def set_fake_positions_at_galaxies(self, phi_deg, d_pix,
                                        fluxes=None, galaxy_indices=None):
         """
