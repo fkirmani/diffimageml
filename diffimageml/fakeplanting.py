@@ -1629,6 +1629,86 @@ class FakePlanter:
 
         return
 
+    def png_MEF(self,MEF,show=True,writetodisk=False,saveas=None,singleABC=True,separateABC=False):
+        """
+        Create PNG for MEF fits file
+
+        A. a difference image, has detection (plant or false positive)
+        B. a 'search' image (typically a "new" single-epoch static sky image), has detection
+        C. the template image (or 'reference'), does not have detection
+
+        Parameters
+        ----------
+        MEF: str or 'astropy.io.fits.hdu.hdulist.HDUList' 
+            If string will attempt fits.open(MEF)
+            Otherwise should be already opened single multi-extension fits file
+        show : bool
+            True or False to display the image
+        writetodisk : bool
+            True or False to save the png to disk
+        saveas : None or str
+            default None will use the header['MEF'] ~ FKNNN.png or FPNNN.png 
+        singleABC : bool
+            3x1 image of A,B,C as single png
+        separateABC : bool
+            3 separate images one png for each A, B, and C 
+        """
+
+        # TODO self.MEF for plants and false positives as part of our FakePlanter Class?
+        # I think requiring MEF as input here is okay since want it to be specific
+        # plants_MEF and FP_MEF would return list-like  
+
+        if type(MEF) == str:
+            try:
+                MEF = fits.open(MEF)
+            except:
+                print("Couldn't read MEF provided.")
+                return
+
+        # assert we have MEF 
+        try:
+            assert(MEF[0].header['MEF'] != None)
+        except:
+            print("No MEF. Provide an MEF to FakePlanter using plants_MEF or FP_MEF.")
+            return
+
+        if saveas == None:
+            saveas = MEF[0].header['MEF'] + ".png"
+
+        if singleABC:
+            fig,ax=plt.subplots(1,3)
+            ax[0].imshow(MEF[1].data)
+            ax[1].imshow(MEF[2].data)
+            ax[2].imshow(MEF[3].data)
+            if writetodisk:
+                plt.savefig(saveas)
+            if show:
+                plt.show()
+
+        if separateABC:
+            plt.imshow(MEF[1].data)
+            if writetodisk:
+                plt.savefig("A"+saveas)
+            if show:
+                plt.show()
+
+            plt.imshow(MEF[2].data)
+            if writetodisk:
+                plt.savefig("B"+saveas)
+            if show:
+                plt.show()
+
+            plt.imshow(MEF[3].data)
+            if writetodisk:
+                plt.savefig("C"+saveas)
+            if show:
+                plt.show()
+
+        return
+
+
+
+
     def plants_MEF(self,fake_indices,cutoutsize=50,writetodisk=False,saveas=None):
         """
         Create MEF Fits file ~ triplet of cutouts around planted FKnnn sources  
