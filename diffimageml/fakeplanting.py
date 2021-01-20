@@ -1556,15 +1556,21 @@ class FakePlanter:
 
         Returns
         -------
-        hdu_with_fakes : FITS HDU object
-            Holds the image data array with the PSF(s) added, and the header
-            with new cards carrying the fake star meta-data.
+        Nothing.  Fakes are in self.diffim and self.searchim
+
         """
         if type(psfmodel) is str:
             psfmodel = self.searchim.__getattribute__(psfmodel)
 
-        self.diffim.plant_fakes_in_sci(psfmodel, posfluxtable[0],**kwargs)
-        self.searchim.plant_fakes_in_sci(psfmodel, posfluxtable[1],**kwargs)
+        # TODO : this function was written to expect two separate tables of
+        #  fake positions (x,y,flux) for the sci image and the diff image.
+        #  Would be better to get RA,Dec and let this plant_fakes_triplet
+        #  function handle the wcs conversions ?
+        # Maybe need a flag in plant_fakes_in_sci that allows RA,Dec instead
+        # of x,y
+
+        self.diffim.plant_fakes_in_sci(psfmodel, posfluxtable, **kwargs)
+        self.searchim.plant_fakes_in_sci(psfmodel, posfluxtable, **kwargs)
 
         # TODO : add writing to disk
         if writetodisk:
@@ -1572,7 +1578,7 @@ class FakePlanter:
         return
 
 
-    def plot_fakes(self, fake_indices, cutoutsize=50):
+    def plot_fakes(self, fake_indices, cutoutsize=50, showtriplets=True):
         """
         Show small cutouts of the fakes planted in the diffim and searchim
 
@@ -1587,6 +1593,10 @@ class FakePlanter:
             number of pixels on a side for the image to be shown. We cut it in
             half and use the integer component, so if an odd number or float is
             provided it is rounded down to the preceding integer.
+
+        showtriplets : bool
+
+
         """
         halfwidth = int(cutoutsize/2)
 
