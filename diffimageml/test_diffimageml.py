@@ -55,11 +55,6 @@ class TestPlanter(unittest.TestCase):
         self.fakeplanterobject = diffimageml.FakePlanter(
             _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
 
-    def test_steves_debugger(self):
-        x = 3
-        y = 2
-        assert x + y == 6
-
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_fakeplanter`")
     def test_fakeplanter(self,accuracy=0.05, fluxscale=10000.):
@@ -85,9 +80,8 @@ class TestPlanter(unittest.TestCase):
         post_imhdr = self.fakeplanterobject.diffim.sci.header
 
         total_fake_flux_measured = np.sum(post_imdata - pre_imdata)
-        # TODO: this should have SCA to stay general if plants are scaled differently
-        total_fake_flux_expected = int(post_imhdr['NFAKES']) * \
-                                   float(post_imhdr['PSF_FLUX'] * fluxscale
+        total_fake_flux_expected = (int(post_imhdr['NFAKES']) *
+                                    float(post_imhdr['PSF_FLUX'] * fluxscale))
         self.assertTrue( np.abs(total_fake_flux_expected -
                                 total_fake_flux_measured) /
                          total_fake_flux_expected < accuracy )
