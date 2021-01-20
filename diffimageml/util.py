@@ -90,9 +90,16 @@ def cut_hdu(self,location,size,writetodisk=False,saveas=None):
     
     return cphdu
 
-def get_lattice_positions(self):
-    """Function for constructing list of pixels in a grid over the image"""
+def get_lattice_positions(self, edge=100, spacing=100):
+    """Function for constructing list of pixels in a grid over the image
 
+    Parameters
+    :edge : int
+    "Gutter" pixels away from the edge of the image for the start/end of grid
+
+    :spacing : int
+    Number of pixels in x and y directions between each fake
+    """
     hdu = self.diffim.sci
     #reads number of rows/columns from header and creates a grid of locations for planting
     hdr = hdu.header
@@ -100,8 +107,6 @@ def get_lattice_positions(self):
     
     NX = hdr['naxis1']
     NY = hdr['naxis2']
-    edge = 100 # pixels away from edge
-    spacing = 100 # pixels between each location on lattice
     x = list(range(0+edge,NX-edge+1,spacing)) # +1 to make inclusive
     y = list(range(0+edge,NY-edge+1,spacing))
     pixels = list(itertools.product(x, y))
@@ -113,12 +118,15 @@ def get_lattice_positions(self):
 
     self.has_lattice = True # if makes it through lattice update has_lattice
 
-    return pixels,skycoords
+    return np.array(pixels), np.array(skycoords)
+
 
 def lco_epsf(self):
     """
-    Another ePSF option besides building just use circular gaussian from lco header on the static sky search im
-    At some point may want to have a class like telescope_psf where we can store pre-defined (i.e. not built) epsf
+    Another ePSF option besides building just use circular gaussian from
+    lco header on the static sky search im
+    At some point may want to have a class like telescope_psf where we can
+    store pre-defined (i.e. not built) epsf
     """
     
     hdu = self.searchim.sci
@@ -152,12 +160,18 @@ def lco_epsf(self):
     table['y_mean'] = [ymean]
     table['x_stddev'] = [sigma]
     table['y_stddev'] = [sigma]
-    epsf = photutils.datasets.make_gaussian_sources_image(shape, table,oversample=oversample)
+    epsfdata = photutils.datasets.make_gaussian_sources_image(shape, table,oversample=oversample)
+
+    # make this produce a fittable2d psf model
+    epsfmodel = photutils.psf.FittableImageModel(epsfdata, normalize=True)
+
+    # TODO : we should include a normalization_correction to account for
+    #  an "aperture correction" due to data outside the model
 
     self.has_lco_epsf = True # update bool if makes it through this function
-    self.lco_epsf = epsf
+    self.lco_epsf = epsfmodel
 
-    return epsf
+    return epsfmodel
 
 def extract_psf_fitting_names(psf):
     """
