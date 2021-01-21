@@ -368,7 +368,7 @@ def model2dG_build(self):
     return gaussian,table,modeled_epsf
 
 
-def write_to_catalog(columns , filename = "cat.ecsv" , overwrite = False ,  add_to = False):
+def write_to_catalog(columns , filename = "cat.ecsv" , column_names = None, overwrite = False ,  add_to = False):
     
 
     """
@@ -384,6 +384,11 @@ def write_to_catalog(columns , filename = "cat.ecsv" , overwrite = False ,  add_
     columns: list or numpy array
         Array containing columns to be written in the catalog.
         Each column can be an Astropy column, list or a numpy array
+        
+    column_names: array
+        Array containing labels for the provided columns to be incuded in the catalog
+        Not necessary if the columns provided are already Astropy columns
+        If none, we will not add labels to the columns
         
     filename: str
         If None, do not save to disk. If provided, save the catalog under this filename
@@ -406,6 +411,17 @@ def write_to_catalog(columns , filename = "cat.ecsv" , overwrite = False ,  add_
     
     """
     
+    ##Prepare columns if necessary.
+
+    for i in range(len(columns)):
+        if type(columns[i]) == Column:
+            continue
+        else:
+            if column_names == None:
+                columns[i] = Column(columns[i])
+            else:
+                columns[i] = Column(columns[i] , name = column_names[i])
+            
     file_format = "ascii.ecsv"
     
     if filename == None: ##Don't save to file, hust return catalog
