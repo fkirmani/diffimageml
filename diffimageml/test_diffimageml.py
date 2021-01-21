@@ -54,30 +54,66 @@ class TestPlanter(unittest.TestCase):
         """Create a FakePlanter object from the pristine (level 0) test data"""
         self.fakeplanterobject = diffimageml.FakePlanter(
             _DIFFIM1_, _SEARCHIM1_, _TEMPLATEIM1_)
-        
+
 
     @unittest.skipIf(_GOFAST_,"Skipping slow `test_fakeplanter`")
-    def test_fakeplanter(self,accuracy=0.05):
+    def test_fakeplanter(self,accuracy=0.05, fluxscale=10000.):
         epsf = diffimageml.util.lco_epsf(self.fakeplanterobject)
-        locations = diffimageml.util.get_lattice_positions(self.fakeplanterobject)
-        pixels,skycoords = locations
+        locations = diffimageml.util.get_lattice_positions(
+            self.fakeplanterobject, edge=500, spacing=500)
+        pixcoords, skycoords = locations
 
         # TODO: this is gonna need debugging
         pre_imdata = self.fakeplanterobject.diffim.sci.data
-        post_im = self.fakeplanterobject.plant_fakes_triplet(epsf, pixels)
-        post_imdata = post_im.data
 
-        fitsflux = np.sum(post_imdata - pre_imdata)
-        # TODO: this should have SCA to stay general if plants are scaled differently
-        epsfflux = int(post_im.header['N_fake'])*float(post_im.header['F_epsf'])
-        self.assertTrue(np.abs(fitsflux-epsfflux)/epsfflux < accuracy)
+        # construct the positions + fluxes table
+        nfakes = len(pixcoords)
+        x = pixcoords[:,0]
+        y = pixcoords[:,1]
+        # TODO : should have a more intelligent way to define a reasonable flux
+        flux = np.ones(nfakes) * fluxscale
+
+        fakestable = Table( {'x_fit':x, 'y_fit':y, 'flux_fit':flux})
+
+        self.fakeplanterobject.plant_fakes_triplet(fakestable, epsf)
+        post_imdata = self.fakeplanterobject.diffim.sci.data
+        post_imhdr = self.fakeplanterobject.diffim.sci.header
+
+        total_fake_flux_measured = np.sum(post_imdata - pre_imdata)
+        total_fake_flux_expected = (int(post_imhdr['NFAKES']) *
+                                    float(post_imhdr['PSF_FLUX'] * fluxscale))
+        self.assertTrue( np.abs(total_fake_flux_expected -
+                                total_fake_flux_measured) /
+                         total_fake_flux_expected < accuracy )
+
 
     def test_lens_parameter_generation(self):
         phi,d = self.fakeplanterobject.generate_lens_parameters(NImage=4)
         self.assertTrue(len(phi)==4 and len(d)==4)
-        phi,d = self.fakeplanterobject.generate_lens_parameters(d_func=lambda x: np.random.normal(loc=5,scale=.1,size=x),
-                                phi_func=lambda x: np.random.normal(loc=5,scale=.1,size=x), NImage=4)
+        phi,d = self.fakeplanterobject.generate_lens_parameters(
+            d_func=lambda x: np.random.normal(loc=5,scale=.1,size=x),
+            phi_func=lambda x: np.random.normal(loc=5,scale=.1,size=x),
+            NImage=4)
         self.assertTrue(len(phi)==4 and len(d)==4)
+
+
+    def test_postage_stamp_triplet_creation(self):
+        # TODO : require that test_fakeplanter has been run first
+
+        diffimhdr = self.fakeplanterobject.diffim.sci.header
+        if 'NFAKES' not in diffimhdr:
+            self.test_fakeplanter()
+
+        nfakes = diffimhdr['NFAKES']
+        fake_indices = np.arange(np.min(nfakes,3))
+        meflist = self.fakeplanterobject.plants_MEF(fake_indices=fake_indices)
+        pnglist = []
+        for mef in meflist:
+            # This creates a PNG for each image in the triplet, shows it,
+            # then closes it.  No saving to disk.  Not sure if this is the
+            # best way to do this.
+            self.fakeplanterobject.png_MEF(mef, show=True, writetodisk=False)
+        return
 
 
 class TestFitsImage(unittest.TestCase):
