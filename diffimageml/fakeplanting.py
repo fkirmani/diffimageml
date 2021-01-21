@@ -1063,7 +1063,7 @@ class FitsImage:
         plt.colorbar()
 
 
-    def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
+    def write_fakesn_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
         
     
         """
@@ -1196,8 +1196,37 @@ class FitsImage:
             readname = filename
         
         self.fakesncat = Table.read(readname , format =_FSNCATFORMAT_)
+        
+    def write_hostgalaxy_catalog(self , filename , overwrite = False , add_to = False):
+        
+        '''
+        Will record all host galaxy information into a host galaxy
+        catalog
+        
+        Parameters
+        __________
+        
+        filename: str
+            File name for the catalog.
+            
+        overwrite: boolean
+            If true, overwrite any existing catalog with the same filename
+            Otherwise we will not overwrite the existing file.
+            
+        add_to: boolead
+            If True we append the host galaxy data onto an existing catalog.
+            Otherwise we create a new file or overwrite existing file
+        '''
+            
+        if self.hostgalaxies == None:
+            ##Generate host galaxy catalog first if necessary
+            
+            self.detect_host_galaxies()
             
             
+        write_to_catalog(self.hostgalaxies, filename = filename , overwrite = overwrite , add_to = add_to)
+        
+
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
     planting fakes, detecting fakes, and creating sub-images and

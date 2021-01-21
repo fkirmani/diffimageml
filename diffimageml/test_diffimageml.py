@@ -7,6 +7,7 @@ _SRCDIR_ = os.path.abspath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
 import diffimageml
+import util
 
 # Hard coding the test data filenames
 _DIFFIM1_ = os.path.abspath(os.path.join(
@@ -211,7 +212,25 @@ class TestSourceDetection(unittest.TestCase):
                 target = True
         
         self.assertTrue(target)
-
+        
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_host_galaxy_catalog`")
+    def test_host_galaxy_catalog(self):
+        pixel_x = 2012
+        pixel_y = 2056
+        ra = 17.3905276
+        dec = 15.0091647
+        self.FitsImageClassInstance.write_hostgalaxy_catalog("test_catalog.ecsv" , overwrite = True)
+        
+        target = False
+        
+        catalog = util.read_catalog("test_catalog.ecsv")
+        
+        for i in catalog:
+            if np.sqrt( (float(i['x'].split()[0]) - pixel_x) ** 2 + (float(i['y'].split()[0]) - pixel_y) ** 2 ) < 10:
+                target = True
+        
+        self.assertTrue(target)
+        
     def tearDown(self):
         self.FitsImageClassInstance.hdulist.close()
 
@@ -227,7 +246,7 @@ def test_loader(loader):
 if __name__ == '__main__':
     #TEST LIST
     #test_cases = 'ALL'
-    test_cases = [TestPlanter]
+    test_cases = [TestSourceDetection]
 
     if test_cases == 'ALL':
         unittest.main()
