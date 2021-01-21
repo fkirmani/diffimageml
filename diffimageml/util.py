@@ -368,7 +368,7 @@ def model2dG_build(self):
     return gaussian,table,modeled_epsf
 
 
-def write_to_catalog(self , filename = "cat.ecsv" , overwrite = False ,  add_to = False):
+def write_to_catalog(columns , filename = "cat.ecsv" , overwrite = False ,  add_to = False):
     
 
     """
@@ -380,7 +380,11 @@ def write_to_catalog(self , filename = "cat.ecsv" , overwrite = False ,  add_to 
 
     Parameters
     ----------
-
+    
+    columns: list or numpy array
+        Array containing columns to be written in the catalog.
+        Each column can be an Astropy column, list or a numpy array
+        
     filename: str
         If None, do not save to disk. If provided, save the catalog under this filename
 
@@ -402,7 +406,7 @@ def write_to_catalog(self , filename = "cat.ecsv" , overwrite = False ,  add_to 
     
     """
     
-    format = ".ecsv"
+    file_format = "ascii.ecsv"
     
     if filename == None: ##Don't save to file, hust return catalog
         catalog = Table(columns)
@@ -413,32 +417,49 @@ def write_to_catalog(self , filename = "cat.ecsv" , overwrite = False ,  add_to 
         if  overwrite: ##Writes (or overwrites) new file 
         
             catalog = Table(columns)
-            catalog.write( savename , format = file_format , overwrite = True)
+            catalog.write( filename , format = file_format , overwrite = True)
             
         else: ##Only write if file does not exist
             
-            if os.path.exists(add_to_filename):
+            if os.path.exists(filename):
                 print ("Warning, file exists but overwrite flag is False. Will not save catalog")
+                catalog = Table(columns)
                 return catalog
                 
             else:
                 catalog = Table(columns)
-                catalog.write( savename , format = file_format , overwrite = False)
+                catalog.write( filename , format = file_format , overwrite = False)
         
     elif add_to: ##Add to existing file if possible
     
-        if os.path.exists(add_to_filename): 
+        if os.path.exists(filename): 
             ##File exists, so we add to the existing catalog
             
             current_catalog = read_catalog(filename)
             new_table = Table(columns)
-            combined_table = vstack([current_catalog , new_table])
-            combined_table.write(filename , format = file_format , overwrite = True)
+            if len(current_catalog.columns) != len(new_table.columns):
+                print ("Warning, mismatch in number of columns between current file and input data")
+                print ("File has {} columns, but write function was provided with {} columns".format(len(current_catalog.columns), len(new_table.columns)))
+                print ("Continuing without saving catalog")
+                return new_table
+            catalog = vstack([current_catalog , new_table])
+            catalog.write(filename , format = file_format , overwrite = True)
             
         else:
             ##File does not exist, so we make one
             
-            self.fakesncat = Table([racol , deccol , scacol , fcol , modcol , xcol , ycol])
-            self.fakesncat.write( add_to_filename , format = file_format , overwrite = True)
+            catalog = Table(columns)
+            catalog.write(filename , format = file_format , overwrite = True)
          
-    return
+    return catalog
+
+def read_catalog(filename):
+    '''
+    Takes in the filename for a catalog
+    
+    Will return the Astropy Table stored in this file
+    
+    '''
+    file_format = "ascii.ecsv"
+    catalog = Table.read(filename , format = file_format)
+    return catalog
