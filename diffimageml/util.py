@@ -413,37 +413,39 @@ def write_to_catalog(columns , filename = "cat.ecsv" , column_names = None, over
     
     ##Prepare columns if necessary.
 
-    for i in range(len(columns)):
-        if type(columns[i]) == Column:
-            continue
-        else:
-            if column_names == None:
-                columns[i] = Column(columns[i])
+    if type(columns) != Table:
+    
+        for i in range(len(columns)):
+            if type(columns[i]) == Column:
+                continue
             else:
-                columns[i] = Column(columns[i] , name = column_names[i])
+                if column_names == None:
+                    columns[i] = Column(columns[i])
+                else:
+                    columns[i] = Column(columns[i] , name = column_names[i])
+        catalog = Table(columns)
+    else:
+        catalog = columns
             
     file_format = "ascii.ecsv"
     
     if filename == None: ##Don't save to file, hust return catalog
-        catalog = Table(columns)
         return catalog
     
     if not add_to: ##Generate new file or overwrite existing file
     
         if  overwrite: ##Writes (or overwrites) new file 
         
-            catalog = Table(columns)
             catalog.write( filename , format = file_format , overwrite = True)
             
         else: ##Only write if file does not exist
-            
-            if os.path.exists(filename):
+
+            if os.path.exists(filename) and not overwrite:
                 print ("Warning, file exists but overwrite flag is False. Will not save catalog")
                 catalog = Table(columns)
                 return catalog
                 
             else:
-                catalog = Table(columns)
                 catalog.write( filename , format = file_format , overwrite = False)
         
     elif add_to: ##Add to existing file if possible
@@ -452,19 +454,18 @@ def write_to_catalog(columns , filename = "cat.ecsv" , column_names = None, over
             ##File exists, so we add to the existing catalog
             
             current_catalog = read_catalog(filename)
-            new_table = Table(columns)
+
             if len(current_catalog.columns) != len(new_table.columns):
                 print ("Warning, mismatch in number of columns between current file and input data")
                 print ("File has {} columns, but write function was provided with {} columns".format(len(current_catalog.columns), len(new_table.columns)))
                 print ("Continuing without saving catalog")
                 return new_table
-            catalog = vstack([current_catalog , new_table])
+            catalog = vstack([current_catalog , catalog])
             catalog.write(filename , format = file_format , overwrite = True)
             
         else:
             ##File does not exist, so we make one
             
-            catalog = Table(columns)
             catalog.write(filename , format = file_format , overwrite = True)
          
     return catalog
