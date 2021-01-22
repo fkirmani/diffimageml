@@ -7,6 +7,7 @@ _SRCDIR_ = os.path.abspath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
 import diffimageml
+import util
 
 # Hard coding the test data filenames
 _DIFFIM1_ = os.path.abspath(os.path.join(
@@ -73,9 +74,19 @@ class TestPlanter(unittest.TestCase):
         # TODO : should have a more intelligent way to define a reasonable flux
         flux = np.ones(nfakes) * fluxscale
 
-        fakestable = Table( {'x_fit':x, 'y_fit':y, 'flux_fit':flux})
 
-        self.fakeplanterobject.plant_fakes_triplet(fakestable, epsf)
+        """
+        To plant fakes in a triplet of images, we construct a 
+        list of three Tables (`~astropy.table.Table`)
+        Each table gives x,y Positions and fluxes for the fake sources.
+        The columns are labeled 'x_fit', 'y_fit', and 'flux_fit'
+        suitable for feeding to the add_psf function.
+        """
+        # TODO: need to adjust x,y locations for search and template images?
+        fakestable = Table( {'x_fit':x, 'y_fit':y, 'flux_fit':flux})
+        fakestablelist = [fakestable, fakestable, fakestable]
+
+        self.fakeplanterobject.plant_fakes_triplet(fakestablelist, epsf)
         post_imdata = self.fakeplanterobject.diffim.sci.data
         post_imhdr = self.fakeplanterobject.diffim.sci.header
 
@@ -104,8 +115,8 @@ class TestPlanter(unittest.TestCase):
         if 'NFAKES' not in diffimhdr:
             self.test_fakeplanter()
 
-        nfakes = diffimhdr['NFAKES']
-        fake_indices = np.arange(np.min(nfakes,3))
+        nfakes_to_plant = np.min([diffimhdr['NFAKES'], 3])
+        fake_indices = np.arange(nfakes_to_plant)
         meflist = self.fakeplanterobject.plants_MEF(fake_indices=fake_indices)
         pnglist = []
         for mef in meflist:
@@ -201,7 +212,25 @@ class TestSourceDetection(unittest.TestCase):
                 target = True
         
         self.assertTrue(target)
-
+        
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_host_galaxy_catalog`")
+    def test_host_galaxy_catalog(self):
+        pixel_x = 2012
+        pixel_y = 2056
+        ra = 17.3905276
+        dec = 15.0091647
+        self.FitsImageClassInstance.write_hostgalaxy_catalog("test_catalog.ecsv" , overwrite = True)
+        
+        target = False
+        
+        catalog = util.read_catalog("test_catalog.ecsv")
+        
+        for i in catalog:
+            if np.sqrt( (float(i['x'].split()[0]) - pixel_x) ** 2 + (float(i['y'].split()[0]) - pixel_y) ** 2 ) < 10:
+                target = True
+        
+        self.assertTrue(target)
+        
     def tearDown(self):
         self.FitsImageClassInstance.hdulist.close()
 
@@ -217,7 +246,7 @@ def test_loader(loader):
 if __name__ == '__main__':
     #TEST LIST
     #test_cases = 'ALL'
-    test_cases = [TestPlanter]
+    test_cases = [TestSourceDetection]
 
     if test_cases == 'ALL':
         unittest.main()

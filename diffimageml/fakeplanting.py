@@ -36,8 +36,8 @@ from matplotlib import pyplot as plt, cm
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 #local
-from util import *
-#from .util import *
+#from util import *
+from .util import *
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
@@ -1063,7 +1063,7 @@ class FitsImage:
         plt.colorbar()
 
 
-    def write_to_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
+    def write_fakesn_catalog(self , save_suffix = "fakecat" , overwrite = False , add_to = False, add_to_filename = None):
         
     
         """
@@ -1196,8 +1196,37 @@ class FitsImage:
             readname = filename
         
         self.fakesncat = Table.read(readname , format =_FSNCATFORMAT_)
+        
+    def write_hostgalaxy_catalog(self , filename , overwrite = False , add_to = False):
+        
+        '''
+        Will record all host galaxy information into a host galaxy
+        catalog
+        
+        Parameters
+        __________
+        
+        filename: str
+            File name for the catalog.
+            
+        overwrite: boolean
+            If true, overwrite any existing catalog with the same filename
+            Otherwise we will not overwrite the existing file.
+            
+        add_to: boolead
+            If True we append the host galaxy data onto an existing catalog.
+            Otherwise we create a new file or overwrite existing file
+        '''
+            
+        if self.hostgalaxies == None:
+            ##Generate host galaxy catalog first if necessary
+            
+            self.detect_host_galaxies()
             
             
+        write_to_catalog(self.hostgalaxies, filename = filename , overwrite = overwrite , add_to = add_to)
+        
+
 class FakePlanter:
     """A class for handling the FITS file triplets (diff,search,ref),
     planting fakes, detecting fakes, and creating sub-images and
@@ -1321,10 +1350,13 @@ class FakePlanter:
 
         Returns
         -------
-        posflux : `~astropy.table.Table`
-                x,y Positions and fluxes for the fake sources.
+        posfluxlist : list of three Tables (`~astropy.table.Table`)
+                Each table gives x,y Positions and fluxes for the fake sources.
                 The columns are labeled 'x_fit', 'y_fit', and 'flux_fit'
                 suitable for feeding to the add_psf function.
+                posfluxlist[0] is the diff image posflux table
+                posfluxlist[1] is the search image posflux table
+                posfluxlist[2] is the template image posflux table
         """
         # TODO : need to check that the host galaxy orientation is what we
         #  think it is.  i.e., is it in deg from the +x direction? or from N?
@@ -1522,8 +1554,8 @@ class FakePlanter:
         return
 
 
-    def plant_fakes_triplet(self, posfluxtable, psfmodel='epsf',
-                            writetodisk=False, save_suffix="withfakes",**kwargs):
+    def plant_fakes_triplet(self, posfluxlist, psfmodel='epsf',
+                            writetodisk=False, save_suffix="withfakes", **kwargs):
         """Function for planting fake stars in the diff image and the search
         image.  Using the ePSF model defined by the search image, adds fake
         PSFs at the x,y pixel positions and flux scales given in posfluxtable.
@@ -1535,10 +1567,13 @@ class FakePlanter:
 
         Parameters
         ----------
-        posfluxtable : Array-like of shape (3, N) or `~astropy.table.Table`
-            Positions and fluxes for the objects to add.  If an array,
-            it is interpreted as ``(x, y, flux)``  If a table, the columns
-            'x_fit', 'y_fit', and 'flux_fit' must be present.
+        posfluxlist : list of three Tables (`~astropy.table.Table`)
+                Each table gives x,y Positions and fluxes for the fake sources.
+                The columns are labeled 'x_fit', 'y_fit', and 'flux_fit'
+                suitable for feeding to the add_psf function.
+                posfluxlist[0] is the diff image posflux table
+                posfluxlist[1] is the search image posflux table
+                posfluxlist[2] is the template image posflux table
 
         psfmodel : str or `astropy.modeling.Fittable2DModel` instance
             PSF/PRF model to be substracted from the data.
@@ -1564,13 +1599,15 @@ class FakePlanter:
 
         # TODO : this function was written to expect two separate tables of
         #  fake positions (x,y,flux) for the sci image and the diff image.
+        #  Shouldn't these be identical?   See issue #110
+        #
         #  Would be better to get RA,Dec and let this plant_fakes_triplet
         #  function handle the wcs conversions ?
         # Maybe need a flag in plant_fakes_in_sci that allows RA,Dec instead
-        # of x,y
+        # of x,y ?
 
-        self.diffim.plant_fakes_in_sci(psfmodel, posfluxtable, **kwargs)
-        self.searchim.plant_fakes_in_sci(psfmodel, posfluxtable, **kwargs)
+        self.diffim.plant_fakes_in_sci(psfmodel, posfluxlist[0], **kwargs)
+        self.searchim.plant_fakes_in_sci(psfmodel, posfluxlist[1], **kwargs)
 
         # TODO : add writing to disk
         if writetodisk:
@@ -1789,7 +1826,7 @@ class FakePlanter:
             ysearch = self.searchim.sci.header[ f'FK{idx:03d}Y' ]
             search_location = (xsearch,ysearch)
             sky_location = wcsutils.pixel_to_skycoord(
-                xsearch, ysearch, search_wcs)
+                xdiff, ydiff, diff_wcs)
             template_location = wcsutils.skycoord_to_pixel(sky_location,template_wcs)
             x_template,y_template = template_location
             # and flux
@@ -2133,8 +2170,8 @@ class FakePlanter:
         """
         if image_with_fakes is None:
             image_with_fakes = self.diffim
-
-        fake_plant_x_keys = [key for key in image_with_fakes.sci.header.keys() if \
+        hdr = image_with_fakes.sci.header
+        fake_plant_x_keys = [key for key in hdr.keys() if \
                              key.startswith('FK') and key.endswith('X')]
         fake_plant_x = []
         fake_plant_y = []
@@ -2142,8 +2179,8 @@ class FakePlanter:
         for key in fake_plant_x_keys:
             fake_id_str = key[2:2+len(str(_MAX_N_PLANTS_))]
             fakeIDs.append(int(fake_id_str))
-            fake_plant_x.append(image_with_fakes.sci.header['FK%sX'%fake_id_str])
-            fake_plant_y.append(image_with_fakes.sci.header['FK%sY'%fake_id_str])
+            fake_plant_x.append(hdr['FK%sX'%fake_id_str])
+            fake_plant_y.append(hdr['FK%sY'%fake_id_str])
         fake_positions = np.array([fake_plant_x,fake_plant_y]).T
         return fakeIDs, fake_positions
 
@@ -2196,10 +2233,8 @@ class FakePlanter:
                 raise RuntimeError("If image_with_fakes is not of type FitsImage, must provide a source_catalog.")
 
         if fake_plant_locations is None:
-            if isinstance(image_with_fakes,FitsImage):
-                fake_plant_ids,fake_plant_locations = self.get_fake_locations(image_with_fakes.sci)
-            else:
-                fake_plant_ids,fake_plant_locations = self.get_fake_locations(image_with_fakes)
+            fake_plant_ids,fake_plant_locations = self.get_fake_locations(image_with_fakes)
+
         # use locations and a search radius on detections and plant locations to get true positives
         tbl = source_catalog.to_table()
         tbl_x,tbl_y = [i.value for i in tbl['xcentroid']], [i.value for i in tbl['ycentroid']]
