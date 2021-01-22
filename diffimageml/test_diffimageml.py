@@ -179,7 +179,7 @@ class TestSourceDetection(unittest.TestCase):
     def setUp(self):
         self.FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
         self.FakePlanterClassInstance = diffimageml.FakePlanter(
-            _FAKEDIFFIM2_)
+            _FAKEDIFFIM2_, searchim_fitsfilename = _SEARCHIM2_)
 
         if not _GOFAST_:
             self.FitsImageClassInstance.detect_sources()
@@ -230,7 +230,15 @@ class TestSourceDetection(unittest.TestCase):
                 target = True
         
         self.assertTrue(target)
+    
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_host_galaxy_catalog`")
+    def test_confusion_matrix(self):
+        cm = self.FakePlanterClassInstance.confusion_matrix()
         
+        self.assertTrue(len(cm[0]) > 5)
+        
+        cm = self.FakePlanterClassInstance.confusion_matrix(low_mag_lim = 27 , high_mag_lim = 28)
+        self.assertTrue(len(cm[0]) == 0)
     def tearDown(self):
         self.FitsImageClassInstance.hdulist.close()
 
