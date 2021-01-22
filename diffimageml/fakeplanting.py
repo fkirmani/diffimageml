@@ -1260,6 +1260,8 @@ class FakePlanter:
         self.has_lco_epsf = False
         # detection_efficiency None until calculated
         self.detection_efficiency = None
+        # detected fake sources None until determined
+        self.plant_detections = None
         return
 
     @property
@@ -1965,7 +1967,7 @@ class FakePlanter:
         if not image_with_fakes.has_detections:
             image_with_fakes.detect_sources()
 
-        fakeID , fakeposition = self.get_fake_locations(image_with_fakes.sci)
+        fakeID , fakeposition = self.get_fake_locations(image_with_fakes)
 
         pixscale = image_with_fakes.sci.header["PIXSCALE"]
         FWHM = image_with_fakes.sci.header["L1FWHM"]
@@ -2005,13 +2007,17 @@ class FakePlanter:
                 if np.sqrt( (k['xcenter'].value - xposition) ** 2 + (k['ycenter'].value - yposition) ** 2) < radius:
                     if np.isnan(k['mag']):
                         magnitudes.append(k['mag'])
-                    magnitudes.append(k['mag'] + self.searchim.zeropoint)
+                    else:
+                        magnitudes.append(k['mag'] + self.searchim.zeropoint)
                     found = True
                     break
-            if not found:
-                magnitudes.append(999)
+            if found:
+                continue
+            magnitudes.append(999)
 
         self.plant_detections = Table([x , y , detect , magnitudes] , names = ('x','y','detect' , 'mag'))
+        
+        return self.plant_detections
 
     def find_false_positives(self , clean_diff = None, edges = False):
         """
@@ -2084,12 +2090,11 @@ class FakePlanter:
         return Table([x , y , mag ] , names = ('x' , 'y' , 'mag'))
 
 
-    def confusion_matrix(self,fp_detections=None):
+    def confusion_matrix(self , fp_detections=None , low_mag_lim = None , high_mag_lim = None):
         """Function for creating confusion matrix of detections vs plants
-        low_mag_lin : Will ignore sources with magnitudes less than this
+        Clean 
+        low_mag_lim : Will ignore sources with magnitudes less than this
         high_mag_lim : Will ignore sources with magnitudes greater than this
-        use_mag : If True, produce confusion matrix with magnitude limits.
-            If false, do not use magnitude limits
         """
 
         #TO-DO decide what the confusion_matrix shoud look like
@@ -2115,7 +2120,10 @@ class FakePlanter:
 
 
         for i in plants:
-            if use_magnitudes and i['mag'] < low_mag_lim or i['mag'] > high_mag_lim:
+            if low_mag_lim != None and (i['mag'] < low_mag_lim or np.isnan(i['mag'])):
+                continue
+                
+            if high_mag_lim != None and (i['mag'] > high_mag_lim or np.isnan(i['mag'])):
                 continue
             if i['detect'] == 1:
                 TP.append(i)
@@ -2128,21 +2136,24 @@ class FakePlanter:
             TP = []
         if len(FN) != 0:
             FN = vstack(FN)
-        FN = []
+        else:
+            FN = []
         
         if fp_detections:
             FP = fp_detections
         else:
             # TO-DO set the parameters in detect_sources using vals from run on the plant 
             # self.detection_vals = [nsigma,kfwhm,npixels,deblend,contrast]
-            if not use_magnitudes:
-                FP = detect_sources(self.diffim.sci)
+            if low_mag_lim == None and high_mag_lim == None:
+                FP = self.find_false_positives()
             else:
 
-                false_positives = find_false_positives()
+                false_positives = self.find_false_positives()
                 FP = []
                 for i in false_positives:
-                    if false_positives['mag'] > high_mag_lim or false_positives['mag'] < high_mag_lim:
+                    if high_mag_lim != None and i['mag'] > high_mag_lim:
+                        continue
+                    elif low_mag_lim != None and i['mag'] < low_mag_lim:
                         continue
                     FP.append(i)
 
@@ -2151,7 +2162,14 @@ class FakePlanter:
                 else:
                     FP = []
 
-        
+        ##Filter out true positives in false positive list
+        real_positives = [] ##List of indices to remove from FP
+        for i in range(len(FP)):
+            if FP[i] in TP:
+                real_positives.append(i)
+        if FP != []:
+            FP.remove_rows(real_positives)
+
         return [TP,FN,FP,TN]
     
     def get_fake_locations(self,image_with_fakes=None):
