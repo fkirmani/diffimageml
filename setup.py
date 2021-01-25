@@ -38,7 +38,8 @@ PACKAGENAME='diffimageml'
 setup(
     name=PACKAGENAME,
     setup_requires='numpy',
-    install_requires=['numpy','scipy','astropy', 'pytest-astropy','pyyaml', 'tensorflow'],
+    install_requires=['numpy','scipy','astropy', 'pytest-astropy','pyyaml',
+                      'tensorflow>=2.4'],
     packages=[PACKAGENAME],
     version=VERSION,
     author=AUTHOR,
