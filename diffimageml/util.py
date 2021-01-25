@@ -41,6 +41,10 @@ def get_example_data():
     example_data['psfmodel1'] = os.path.abspath(os.path.join(
         example_data['dir'], "sky_image_1_TestEPSFModel.pkl"))
 
+    example_data['cnninputdatadir1'] = os.path.abspath(os.path.join(
+        example_data['dir'], "cnninputdata1"))
+
+
     return example_data
 
 
