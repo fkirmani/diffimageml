@@ -1,10 +1,11 @@
 from __future__ import print_function
-import os
+# import os
 from astropy.tests.helper import TestRunner
 
-from .fakeplanting import *
 from .util import *
-from .plant_fakes import *
+from .fakeplanting import *
+from .machinelearning import *
+# from .plant_fakes import *
 from .test_diffimageml import *
 
 def test(package=None, test_path=None, args=None, plugins=None,

@@ -2,10 +2,11 @@ import tensorflow as tf
 
 
 
-class ImageTripletNeuralNet():
+class ImageTripletNeuralNet:
     """This class is for a CNN that will operate on a triplet
-    of images (template,search,diff) as the atomic unit of data.
-
+    of images (template,search,diff) as the atomic unit of data.  The triplet
+    is stored with each component as one of the R,G,B channels of a .png file.
+     R=template, G=search, B=diff.
     """
 
     def __init__(self):
