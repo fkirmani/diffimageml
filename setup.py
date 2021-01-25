@@ -8,7 +8,7 @@ if sys.version_info < (3,0):
     sys.exit('Sorry, Python 2 is not supported')
 
 
-AUTHOR = 'Steve Rodney'
+AUTHOR = 'SC-SN research team'
 AUTHOR_EMAIL = 'srodney@sc.edu'
 VERSION = '0.0.1'
 LICENSE = ''
@@ -38,7 +38,7 @@ PACKAGENAME='diffimageml'
 setup(
     name=PACKAGENAME,
     setup_requires='numpy',
-    install_requires=['numpy','scipy','astropy', 'pytest-astropy','pyyaml'],
+    install_requires=['numpy','scipy','astropy', 'pytest-astropy','pyyaml', 'tensorflow'],
     packages=[PACKAGENAME],
     version=VERSION,
     author=AUTHOR,
