@@ -14,6 +14,9 @@ from photutils.datasets import make_gaussian_sources_image
 
 import itertools
 
+import PIL
+from PIL import Image
+
 def get_example_data():
     """Returns a dict with the filepath for each of the input images used
     as example data"""
@@ -46,6 +49,116 @@ def get_example_data():
 
 
     return example_data
+
+
+def PIL_IM(png,channel=None,writetodisk=False,saveas=None,show=False,pkl=False):
+    """
+    https://pillow.readthedocs.io/en/stable/handbook/tutorial.html
+    Python Imaging Library (PIL) has many useful image processing tools for Image Class
+    
+    Notation...
+    A. a difference image, has detection (plant or false positive)
+    B. a 'search' image (typically a "new" single-epoch static sky image), has detection
+    C. the template image (or 'reference'), does not have detection
+    
+    RGB...
+    A secondary book-keeping technique employed for channels in which the ABC image data are stored
+    Another method to cleanly identify which type of image is being looked at, should be no loss of data for ML
+    A. R-channel png
+    B. G-channel png
+    C. B-channel png
+    
+    Parameters
+    ----------
+    png : str 
+        filename of image which has detected sources to train on
+    channel : str
+        Default None attempts to use png (filename) to set. If provided needs to be str(r) or str(g) or str(b)
+    writetodisk : bool
+        Default False. True or False to save the png converted to given channel. 
+    saveas : None or str
+        Default None will use the png filename. For LCO taken from the header['MEF'] ~ FKNNN.png or FPNNN.png 
+    pkl : bool
+        Default False. Do we want option to save the opened PIL Image Class to disk as a pickle
+    show : bool
+        True or False to display the image
+    Returns
+    ---------
+    PIL.PngImagePlugin.PngImageFile
+    """
+
+    # read in the image
+    try:
+        im = Image.open(png)
+    except:
+        print("Couldn't read png image provided. Please try again.")
+        return
+    
+    # determine the mode (will probably be RGBA A ~ alpha/transparency)
+    mode = im.mode
+    print(mode)
+    
+    # put into RGB
+    if  im.mode != "RGB":
+        print("converting from {} to RGB".format(mode))
+        rgb = im.convert("RGB")
+    else:
+        rgb = im
+    
+    # Define matrices to convert RGB to provided channel 
+    """
+    __________________________________________________
+                    ## MATRIX ## 
+           R           G            B       constants
+     R: 1*oldRed + 0*oldGreen + 0*oldBlue +    C
+     G: 0*oldRed + 1*oldGreen + 0*oldBlue +    C
+     B: 0*oldRed + 0*oldGreen + 1*oldBlue +    C
+     ________________________________________________
+    """
+    
+    rmatrix = ( 1, 0, 0, 0, 
+           0, 0, 0, 0, 
+           0, 0, 0, 0) 
+    gmatrix = ( 0, 0, 0, 0, 
+           0, 1, 0, 0, 
+           0, 0, 0, 0) 
+    bmatrix = ( 0, 0, 0, 0, 
+           0, 0, 0, 0, 
+           0, 0, 1, 0) 
+    
+    # if not provided channel explicitly will attempt to use filename
+    if channel == None:
+        channel = png[0].lower()
+        if channel != "r" or channel != "g" or channel != "b":
+            print("Don't understand the channel. Please try again.")
+            return
+    # convert the image to given channel
+    if channel.lower() == "r":
+        img = rgb.convert("RGB",rmatrix)
+    elif channel.lower() == "g":
+        img = rgb.convert("RGB",gmatrix)
+    elif channel.lower() == "b":
+        img = rgb.convert("RGB",bmatrix)
+    else:
+        print("Don't understand the channel. Need to provide str(r) or str(g) or str(b). Please try again.")
+        return
+    
+    if saveas == None:
+        saveas = channel+'_'+os.path.basename(png)
+    
+    # save the converted channel png
+    if writetodisk:
+        img.save(saveas)
+    
+    # pickle im, the 0-level PIL.PngImagePlugin.PngImageFile read-in if want to do more processing
+    if pkl:
+        pklas = saveas[:-3] + "pkl"
+        pickle.dump(im,open(pklas,"wb"))
+    
+    if show:
+        img.show()
+        
+    return img
 
 
 def pixtosky(self,pixel):
@@ -487,3 +600,27 @@ def read_catalog(filename):
     file_format = "ascii.ecsv"
     catalog = Table.read(filename , format = file_format)
     return catalog
+
+
+if __name__ == "__main__":
+    import glob
+    lco,lsst = False,True
+    if lco:
+        Apngs = glob.glob("test_data/cnninputdata2/class_lco/A/*png")
+        Bpngs = glob.glob("test_data/cnninputdata2/class_lco/B/*png")
+        Cpngs = glob.glob("test_data/cnninputdata2/class_lco/C/*png")
+    if lsst:
+        Apngs = glob.glob("test_data/cnninputdata2/class_lsst/A/*")
+        Bpngs = glob.glob("test_data/cnninputdata2/class_lsst/B/*")
+        Cpngs = glob.glob("test_data/cnninputdata2/class_lsst/C/*")
+
+    for file in Apngs:
+        print(file)
+        PIL_IM(file,channel="r",writetodisk=True)
+    for file in Bpngs:
+        print(file)
+        PIL_IM(file,channel="g",writetodisk=True)
+    for file in Cpngs:
+        print(file)
+        PIL_IM(file,channel='b',writetodisk=True)
+
