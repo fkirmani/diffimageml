@@ -600,6 +600,88 @@ def read_catalog(filename):
     file_format = "ascii.ecsv"
     catalog = Table.read(filename , format = file_format)
     return catalog
+    
+def fits_rgb_png(mef , savefilename = None , show = False):
+    '''
+    Function to combine three fits images into a single RGB png file
+    Assignes the difference image to be red, the search image to green
+    and the template image to blue
+    
+    Parameters
+    __________
+    
+    mef: This is a multi-extention fits file. Should include a difference image,
+        search image and template image.
+        
+    savefilename: str : If None, do not save resulting png file to disk. Otherwise, save
+        resulting png to this filename
+    
+    show: boolean : If True, then show the resulting image
+    
+    Returns
+    _______
+    
+    Returns a PIL Image object containing an RGB png
+    
+    '''
+    
+    #The following generates an RGB image and saves it using PIL
+    ##PIL Only handles 3x8 png images with RGB, so pixel data has to be manipulated to make it fit
+
+    diff_data = mef[1].data
+    search_data = mef[2].data
+    templ_data = mef[3].data
+
+
+    ##Shift the data so that the smallest pixel value is 0.
+    ##Reduces the amount of rescaling necessary
+    diff_shift = ( np.amin(diff_data) )
+    search_shift = (np.amin(search_data) )
+    templ_shift = ( np.amin(templ_data) )
+
+    
+    diff_data -= diff_shift
+    search_data -= search_shift
+    templ_data -= templ_shift
+    
+    compression_factor = max( np.amax(diff_data) , np.amax(templ_data) , np.amax(search_data)) / 255
+    
+    diff_data /= compression_factor
+    search_data /= compression_factor
+    templ_data /= compression_factor
+
+    ##Check pixel values, print warning if we are overflowing max allowed value.
+    ##If we are, png files will round any values greater than 255 to 255
+    
+    if np.amax(diff_data) > 255:
+        print ("Warning, max pixel value in diffs ({}) excedes max png pixel value".format(np.amax(diff_data)))
+    if np.amax(search_data) > 255:
+        print ("Warning, max pixel value in search ({}) excedes max png pixel value".format(np.amax(search_data)))
+    if np.amax(templ_data) > 255:
+        print ("Warning, max pixel value in templ ({}) excedes max png pixel value".format(np.amax(templ_data)))
+
+
+    ##Build PIL images from fits data
+    diff=Image.fromarray(diff_data)
+    search=Image.fromarray(search_data)
+    templ=Image.fromarray(templ_data)
+
+    composite=Image.merge('RGB' , (diff.convert('L'),search.convert('L'),templ.convert('L'))) ##RGB Image
+
+
+    #Save outputs
+    if savefilename != None:
+    
+        diff.convert('L').save(savefilename + "_diff.png")
+        search.convert('L').save(savefilename + "_search.png")
+        templ.convert('L').save(savefilename + "template.png")
+        composite.save(savefilename + "_rgb.png")
+    
+    if show:
+        composite.show()
+        
+    return composite
+
 
 
 if __name__ == "__main__":
