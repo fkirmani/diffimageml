@@ -14,6 +14,10 @@ from photutils.datasets import make_gaussian_sources_image
 
 import itertools
 
+import PIL
+from PIL import Image
+import cv2
+
 def get_example_data():
     """Returns a dict with the filepath for each of the input images used
     as example data"""
@@ -41,7 +45,121 @@ def get_example_data():
     example_data['psfmodel1'] = os.path.abspath(os.path.join(
         example_data['dir'], "sky_image_1_TestEPSFModel.pkl"))
 
+    example_data['cnninputdatadir1'] = os.path.abspath(os.path.join(
+        example_data['dir'], "cnninputdata1"))
+
+
     return example_data
+
+
+def PIL_IM(png,channel=None,writetodisk=False,saveas=None,show=False,pkl=False):
+    """
+    https://pillow.readthedocs.io/en/stable/handbook/tutorial.html
+    Python Imaging Library (PIL) has many useful image processing tools for Image Class
+    
+    Notation...
+    A. a difference image, has detection (plant or false positive)
+    B. a 'search' image (typically a "new" single-epoch static sky image), has detection
+    C. the template image (or 'reference'), does not have detection
+    
+    RGB...
+    A secondary book-keeping technique employed for channels in which the ABC image data are stored
+    Another method to cleanly identify which type of image is being looked at, should be no loss of data for ML
+    A. R-channel png
+    B. G-channel png
+    C. B-channel png
+    
+    Parameters
+    ----------
+    png : str 
+        filename of image which has detected sources to train on
+    channel : str
+        Default None attempts to use png (filename) to set. If provided needs to be str(r) or str(g) or str(b)
+    writetodisk : bool
+        Default False. True or False to save the png converted to given channel. 
+    saveas : None or str
+        Default None will use the png filename. For LCO taken from the header['MEF'] ~ FKNNN.png or FPNNN.png 
+    pkl : bool
+        Default False. Do we want option to save the opened PIL Image Class to disk as a pickle
+    show : bool
+        True or False to display the image
+    Returns
+    ---------
+    PIL.PngImagePlugin.PngImageFile
+    """
+
+    # read in the image
+    try:
+        im = Image.open(png)
+    except:
+        print("Couldn't read png image provided. Please try again.")
+        return
+    
+    # determine the mode (will probably be RGBA A ~ alpha/transparency)
+    mode = im.mode
+    print(mode)
+    
+    # put into RGB
+    if  im.mode != "RGB":
+        print("converting from {} to RGB".format(mode))
+        rgb = im.convert("RGB")
+    else:
+        rgb = im
+    
+    # Define matrices to convert RGB to provided channel 
+    """
+    __________________________________________________
+                    ## MATRIX ## 
+           R           G            B       constants
+     R: 1*oldRed + 0*oldGreen + 0*oldBlue +    C
+     G: 0*oldRed + 1*oldGreen + 0*oldBlue +    C
+     B: 0*oldRed + 0*oldGreen + 1*oldBlue +    C
+     ________________________________________________
+    """
+    
+    rmatrix = ( 1, 0, 0, 0, 
+           0, 0, 0, 0, 
+           0, 0, 0, 0) 
+    gmatrix = ( 0, 0, 0, 0, 
+           0, 1, 0, 0, 
+           0, 0, 0, 0) 
+    bmatrix = ( 0, 0, 0, 0, 
+           0, 0, 0, 0, 
+           0, 0, 1, 0) 
+    
+    # if not provided channel explicitly will attempt to use filename
+    if channel == None:
+        channel = png[0].lower()
+        if channel != "r" or channel != "g" or channel != "b":
+            print("Don't understand the channel. Please try again.")
+            return
+    # convert the image to given channel
+    if channel.lower() == "r":
+        img = rgb.convert("RGB",rmatrix)
+    elif channel.lower() == "g":
+        img = rgb.convert("RGB",gmatrix)
+    elif channel.lower() == "b":
+        img = rgb.convert("RGB",bmatrix)
+    else:
+        print("Don't understand the channel. Need to provide str(r) or str(g) or str(b). Please try again.")
+        return
+    
+    if saveas == None:
+        saveas = channel+'_'+os.path.basename(png)
+    
+    # save the converted channel png
+    if writetodisk:
+        img.save(saveas)
+    
+    # pickle im, the 0-level PIL.PngImagePlugin.PngImageFile read-in if want to do more processing
+    if pkl:
+        pklas = saveas[:-3] + "pkl"
+        pickle.dump(im,open(pklas,"wb"))
+    
+    if show:
+        img.show()
+        
+    return img
 
 
 def pixtosky(self,pixel):
@@ -483,3 +601,120 @@ def read_catalog(filename):
     file_format = "ascii.ecsv"
     catalog = Table.read(filename , format = file_format)
     return catalog
+    
+def fits_rgb_png(mef , savefilename = None , show = False):
+    '''
+    Function to combine three fits images into a single RGB png file
+    Assignes the difference image to be red, the search image to green
+    and the template image to blue
+    
+    Parameters
+    __________
+    
+    mef: This can be a multi-extention fits file. Should include a difference image,
+        search image and template image.
+        Can also be a list of FitsImage objects or a FakePlanter object
+        
+    savefilename: str : If None, do not save resulting png file to disk. Otherwise, save
+        resulting png to this filename
+    
+    show: boolean : If True, then show the resulting image
+    
+    Returns
+    _______
+    
+    Returns a PIL Image object containing an RGB png
+    
+    '''
+    
+    #The following generates an RGB image and saves it using PIL
+    ##PIL Only handles 3x8 png images with RGB, so pixel data has to be manipulated to make it fit
+
+    diff_data = mef[1].data
+    search_data = mef[2].data
+    templ_data = mef[3].data
+
+
+    ##Shift the data so that the smallest pixel value is 0.
+    ##Reduces the amount of rescaling necessary
+    diff_shift = ( np.amin(diff_data) )
+    search_shift = (np.amin(search_data) )
+    templ_shift = ( np.amin(templ_data) )
+
+    
+    diff_data -= diff_shift
+    search_data -= search_shift
+    templ_data -= templ_shift
+    
+
+
+
+    largest_allowed_pix_value = 255
+    largest_pix_value = max( np.amax(diff_data) , np.amax(templ_data) , np.amax(search_data))
+    
+    compression_factor = max( largest_pix_value / largest_allowed_pix_value , 1.0) ##Only compress id necessary
+    
+    print ("Data will be rescaled by a factor of {}".format(compression_factor))
+    
+    diff_data /= compression_factor
+    search_data /= compression_factor
+    templ_data /= compression_factor
+
+    ##Check pixel values, print warning if we are overflowing max allowed value.
+    ##If we are, png files will round any values greater than 255 to 255
+    
+    if np.amax(diff_data) > largest_allowed_pix_value:
+        print ("Warning, max pixel value in diffs ({}) excedes max png pixel value".format(np.amax(diff_data)))
+    if np.amax(search_data) > largest_allowed_pix_value:
+        print ("Warning, max pixel value in search ({}) excedes max png pixel value".format(np.amax(search_data)))
+    if np.amax(templ_data) > largest_allowed_pix_value:
+        print ("Warning, max pixel value in templ ({}) excedes max png pixel value".format(np.amax(templ_data)))
+
+    
+
+
+    ##Build PIL images from fits data
+    diff=Image.fromarray(diff_data)
+    search=Image.fromarray(search_data)
+    templ=Image.fromarray(templ_data)
+
+    composite=Image.merge('RGB' , (diff.convert('L'),search.convert('L'),templ.convert('L'))) ##RGB Image
+
+
+    #Save outputs
+    if savefilename != None:
+    
+        diff.convert('L').save(savefilename + "_diff.png")
+        search.convert('L').save(savefilename + "_search.png")
+        templ.convert('L').save(savefilename + "template.png")
+        composite.save(savefilename + "_rgb.png")
+    
+    if show:
+        composite.show()
+        
+    return composite
+
+
+
+if __name__ == "__main__":
+    import glob
+    lco,lsst = False,True
+    if lco:
+        Apngs = glob.glob("test_data/cnninputdata2/class_lco/A/*png")
+        Bpngs = glob.glob("test_data/cnninputdata2/class_lco/B/*png")
+        Cpngs = glob.glob("test_data/cnninputdata2/class_lco/C/*png")
+    if lsst:
+        Apngs = glob.glob("test_data/cnninputdata2/class_lsst/A/*")
+        Bpngs = glob.glob("test_data/cnninputdata2/class_lsst/B/*")
+        Cpngs = glob.glob("test_data/cnninputdata2/class_lsst/C/*")
+
+    for file in Apngs:
+        print(file)
+        PIL_IM(file,channel="r",writetodisk=True)
+    for file in Bpngs:
+        print(file)
+        PIL_IM(file,channel="g",writetodisk=True)
+    for file in Cpngs:
+        print(file)
+        PIL_IM(file,channel='b',writetodisk=True)
+

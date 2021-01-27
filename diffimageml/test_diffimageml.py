@@ -6,8 +6,8 @@ from astropy.table import Table
 _SRCDIR_ = os.path.abspath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
-import diffimageml
 import util
+import diffimageml
 
 # Hard coding the test data filenames
 _DIFFIM1_ = os.path.abspath(os.path.join(
@@ -179,7 +179,7 @@ class TestSourceDetection(unittest.TestCase):
     def setUp(self):
         self.FitsImageClassInstance = diffimageml.FitsImage(_SEARCHIM1_)
         self.FakePlanterClassInstance = diffimageml.FakePlanter(
-            _FAKEDIFFIM2_)
+            _FAKEDIFFIM2_, searchim_fitsfilename = _SEARCHIM2_)
 
         if not _GOFAST_:
             self.FitsImageClassInstance.detect_sources()
@@ -230,9 +230,36 @@ class TestSourceDetection(unittest.TestCase):
                 target = True
         
         self.assertTrue(target)
+    
+    @unittest.skipIf(_GOFAST_,"Skipping slow `test_host_galaxy_catalog`")
+    def test_confusion_matrix(self):
+        cm = self.FakePlanterClassInstance.confusion_matrix()
         
+        self.assertTrue(len(cm[0]) > 5)
+        
+        cm = self.FakePlanterClassInstance.confusion_matrix(low_mag_lim = 27 , high_mag_lim = 28)
+        self.assertTrue(len(cm[0]) == 0)
+
     def tearDown(self):
         self.FitsImageClassInstance.hdulist.close()
+
+
+class TestMachineLearning(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.tripletneuralnet = diffimageml.machinelearning.ImageTripletNeuralNet()
+        return
+
+    def test_image_preprocessing(self):
+        exampledatadict = util.get_example_data()
+        inputdatadir = exampledatadict['cnninputdatadir1']
+        self.tripletneuralnet.preprocess_input_images(datadir=inputdatadir)
+        # TODO : add a useful completeness check
+        return
+
+    def tearDown(self) -> None:
+        # nothing to tear down yet
+        return
 
 
 def test_loader(loader):
@@ -246,7 +273,8 @@ def test_loader(loader):
 if __name__ == '__main__':
     #TEST LIST
     #test_cases = 'ALL'
-    test_cases = [TestSourceDetection]
+    #test_cases = [TestSourceDetection]
+    test_cases = [TestMachineLearning]
 
     if test_cases == 'ALL':
         unittest.main()
