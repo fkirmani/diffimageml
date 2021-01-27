@@ -16,6 +16,7 @@ import itertools
 
 import PIL
 from PIL import Image
+import cv2
 
 def get_example_data():
     """Returns a dict with the filepath for each of the input images used
@@ -610,8 +611,9 @@ def fits_rgb_png(mef , savefilename = None , show = False):
     Parameters
     __________
     
-    mef: This is a multi-extention fits file. Should include a difference image,
+    mef: This can be a multi-extention fits file. Should include a difference image,
         search image and template image.
+        Can also be a list of FitsImage objects or a FakePlanter object
         
     savefilename: str : If None, do not save resulting png file to disk. Otherwise, save
         resulting png to this filename
@@ -644,7 +646,15 @@ def fits_rgb_png(mef , savefilename = None , show = False):
     search_data -= search_shift
     templ_data -= templ_shift
     
-    compression_factor = max( np.amax(diff_data) , np.amax(templ_data) , np.amax(search_data)) / 255
+
+
+
+    largest_allowed_pix_value = 255
+    largest_pix_value = max( np.amax(diff_data) , np.amax(templ_data) , np.amax(search_data))
+    
+    compression_factor = max( largest_pix_value / largest_allowed_pix_value , 1.0) ##Only compress id necessary
+    
+    print ("Data will be rescaled by a factor of {}".format(compression_factor))
     
     diff_data /= compression_factor
     search_data /= compression_factor
@@ -653,12 +663,14 @@ def fits_rgb_png(mef , savefilename = None , show = False):
     ##Check pixel values, print warning if we are overflowing max allowed value.
     ##If we are, png files will round any values greater than 255 to 255
     
-    if np.amax(diff_data) > 255:
+    if np.amax(diff_data) > largest_allowed_pix_value:
         print ("Warning, max pixel value in diffs ({}) excedes max png pixel value".format(np.amax(diff_data)))
-    if np.amax(search_data) > 255:
+    if np.amax(search_data) > largest_allowed_pix_value:
         print ("Warning, max pixel value in search ({}) excedes max png pixel value".format(np.amax(search_data)))
-    if np.amax(templ_data) > 255:
+    if np.amax(templ_data) > largest_allowed_pix_value:
         print ("Warning, max pixel value in templ ({}) excedes max png pixel value".format(np.amax(templ_data)))
+
+    
 
 
     ##Build PIL images from fits data
