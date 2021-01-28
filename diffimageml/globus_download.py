@@ -67,19 +67,22 @@ if doCreate:
 	
 	test = tc.endpoint_autoactivate(local_ep_id)
 
-subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
-subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
-fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
-os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
-subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
-subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
-os.chdir(os.path.abspath(os.path.dirname(__file__)))
-globus_folders = glob.glob('globusconnectpersonal-*')
-print(globus_folders)
-#for f in globus_folders:
-#	shutil.rmtree(f)
+runProcess = False
+if runProcess:
 
-print(local_ep_id)
+	subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
+	subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
+	fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
+	os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
+	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
+	subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
+	os.chdir(os.path.abspath(os.path.dirname(__file__)))
+	globus_folders = glob.glob(os.path.join(os.path.abspath(os.path.dirname(__file__)),'globusconnectpersonal-*'))
+	print(globus_folders)
+	#for f in globus_folders:
+	#	shutil.rmtree(f)
+
+	print(local_ep_id)
 tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
 									local_ep_id)
 local_path = os.path.dirname(os.path.realpath(__file__))
