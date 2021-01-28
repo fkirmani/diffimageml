@@ -1,6 +1,6 @@
 import globus_sdk
 from globus_sdk import AuthClient, AccessTokenAuthorizer,LocalGlobusConnectPersonal
-import sys,os
+import sys,os,subprocess,glob,shutil
 
 #jpierel
 #CLIENT_ID = 'e0aa9bd5-bb19-4110-9c2c-2a3bcdcdc04f'
@@ -46,12 +46,18 @@ authorizer = globus_sdk.RefreshTokenAuthorizer(
 # work -- for days and days, months and months, even years
 tc = globus_sdk.TransferClient(authorizer=authorizer)
 
+#from globus_sdk import LocalGlobusConnectPersonal
 
-
+# None if Globus Connect Personal is not installed
+#endpoint_id = LocalGlobusConnectPersonal().endpoint_id
+#print(endpoint_id)
+#sys.exit()
+_filedir_ = os.path.dirname(__file__)
+runProcess = True
 doCreate = True
 if doCreate:
 	print('local')
-	ep_data={'DATA_TYPE':"endpoint",'display_name':'scsn',
+	ep_data={'DATA_TYPE':"endpoint",'display_name':'fawad_cluster',
 				'is_globus_connect': True,
 				'myproxy_server': 'myproxy.globusonline.org'}#,'DATA':[{'DATA_TYPE':'local','hostname':'local'}]}
 	create_result = tc.create_endpoint(ep_data)
@@ -59,10 +65,38 @@ if doCreate:
 	uuid = create_result['canonical_name'].split('#')[1]
 	#local_ep = LocalGlobusConnectPersonal()
 	local_ep_id=uuid#local_ep.endpoint_id
-	print(local_ep_id,setup_key)
-
-	print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
+	
 	test = tc.endpoint_autoactivate(local_ep_id)
+#sys.exit()
+#local_ep_id='509e962e-619e-11eb-8c31-0eb1aa8d4337'
+if runProcess:
+	subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
+	subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
+	fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
+	new_dir=os.path.join(os.path.abspath(_filedir_), fname)
+	os.chdir(new_dir)
+	#os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
+	subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
+	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
+	os.chdir(os.path.abspath(_filedir_))
+	print(os.path.join(os.path.abspath(_filedir_),'globusconnectpersonal-*'))
+	globus_folders = glob.glob(os.path.join(os.path.abspath(_filedir_),'globusconnectpersonal-*'))
+	print(globus_folders)
+	#for f in globus_folders:
+	#	shutil.rmtree(f)
+
+	print(local_ep_id)
+tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
+									local_ep_id)
+local_path = os.path.dirname(os.path.realpath(__file__))
+#local_path = '/project2/rkessler/SURVEYS/WFIRST/ROOT'
+tdata.add_item("README.txt",os.path.join(local_path,'README.txt'))#"CodeBase/diffimageml/diffimageml/README.txt")
+transfer_result = tc.submit_transfer(tdata)
+print(transfer_result)
+sys.exit()
+if False:
+	print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
+	
 	sys.exit()
 
 	#wait?
@@ -83,10 +117,4 @@ if doCreate:
 			sys.exit()
 	print('Success! Copying...')
 
-tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
-									local_ep_id)
-local_path = os.path.dirname(os.path.realpath(__file__))
 
-tdata.add_item("README.txt",os.path.join(local_path,'README.txt'))#"CodeBase/diffimageml/diffimageml/README.txt")
-transfer_result = tc.submit_transfer(tdata)
-print(transfer_result)
