@@ -70,7 +70,7 @@ subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/li
 subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
 fname = glob.glob('globusconnectpersonal-*')[0]
 os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
-subprocess.call([r'./globusconnectpersonal','-start','&'])
+subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
 subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
 
 sys.exit()
