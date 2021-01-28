@@ -111,7 +111,9 @@ def fetchGlobus(wait=True,globus_files=None,globus_folders=None,cleanup=True):
 					print('Waited 5 minutes...giving up.')
 					sys.exit()
 			print('Success! Continuing...')
-	
+	elif 'linux' in sys.platform:
+		globus_dir_name = globus.startGlobusConnectPersonal()
+
 	globus.retrieveGlobusData(globus_files=globus_files,globus_folders=globus_folders)
 	print("Task submitted successfully, transferring...")
 	globus.waitForTransfer(globus.transfer_result['task_id'])
