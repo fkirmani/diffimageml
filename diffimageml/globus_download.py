@@ -63,10 +63,21 @@ if doCreate:
 	uuid = create_result['canonical_name'].split('#')[1]
 	#local_ep = LocalGlobusConnectPersonal()
 	local_ep_id=uuid#local_ep.endpoint_id
-	print(local_ep_id,setup_key)
-
-	print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
+	
 	test = tc.endpoint_autoactivate(local_ep_id)
+
+import glob,os
+subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
+subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
+fname = glob.glob('globusconnectpersonal-*')[0]
+os.chdir(os.path.join(_filedir_, 'fname'))
+subprocess.call([r'./globusconnectpersonal','-start','&'])
+subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
+
+sys.exit()
+if False:
+	print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
+	
 	sys.exit()
 
 	#wait?
