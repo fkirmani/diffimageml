@@ -67,6 +67,7 @@ if doCreate:
 	
 	test = tc.endpoint_autoactivate(local_ep_id)
 #sys.exit()
+local_ep_id='509e962e-619e-11eb-8c31-0eb1aa8d4337'
 runProcess = False
 if runProcess:
 
