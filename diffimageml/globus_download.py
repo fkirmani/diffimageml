@@ -45,17 +45,17 @@ authorizer = globus_sdk.RefreshTokenAuthorizer(
 # and try using `tc` to make TransferClient calls. Everything should just
 # work -- for days and days, months and months, even years
 tc = globus_sdk.TransferClient(authorizer=authorizer)
-from globus_sdk import LocalGlobusConnectPersonal
+#from globus_sdk import LocalGlobusConnectPersonal
 
 # None if Globus Connect Personal is not installed
-endpoint_id = LocalGlobusConnectPersonal().endpoint_id
-print(endpoint_id)
-sys.exit()
+#endpoint_id = LocalGlobusConnectPersonal().endpoint_id
+#print(endpoint_id)
+#sys.exit()
 
 doCreate = True
 if doCreate:
 	print('local')
-	ep_data={'DATA_TYPE':"endpoint",'display_name':'scsn',
+	ep_data={'DATA_TYPE':"endpoint",'display_name':'midway',
 				'is_globus_connect': True,
 				'myproxy_server': 'myproxy.globusonline.org'}#,'DATA':[{'DATA_TYPE':'local','hostname':'local'}]}
 	create_result = tc.create_endpoint(ep_data)
