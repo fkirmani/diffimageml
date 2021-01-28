@@ -40,7 +40,7 @@ class globusDataClass():
 		_ = self.transfer_client.endpoint_autoactivate(self.local_ep_id)
 		return(self.local_ep_id,self.setup_key)
 
-	def startGlobusConnectPersonal(self,setup_key=None,cleanup=True):
+	def startGlobusConnectPersonal(self,setup_key=None):
 		if setup_key is None:
 			setup_key = self.setup_key
 		subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
@@ -50,18 +50,10 @@ class globusDataClass():
 		new_dir = os.path.join(old_dir, fname)
 		#os.chdir(new_dir)
 		subprocess.call([os.path.join('.',new_dir,'globusconnectpersonal'),'-setup',setup_key])
-		print(os.path.join('.',new_dir,'globusconnectpersonal'))
 		subprocess.Popen([os.path.join(new_dir,'globusconnectpersonal'),'-start'],shell=False)
-		print(os.path.join('.',new_dir,'globusconnectpersonal'))
-		#os.chdir(old_dir)
-		if cleanup:
-			globus_folders = glob.glob(os.path.join(old_dir,'globusconnectpersonal-*'))
-			for f in globus_folders:
-				if 'tgz' in f:
-					os.remove(f)
-				#else:
-
-				#	shutil.rmtree(f)
+		return(new_dir)
+		
+		
 	def getGlobusFiles(self):
 		return self.transfer_client.operation_ls(self.transfer_client.endpoint_search(DATA_ENDPOINT_NAME)[0]['name'])
 
@@ -94,13 +86,13 @@ class globusDataClass():
 		while not self.transfer_client.task_wait(task_id, timeout=timeout):
 			print("An hour went by without {0} terminating"
 					.format(task_id))
-def fetchGlobus(wait=True,globus_files=None,globus_folders=None):
+def fetchGlobus(wait=True,globus_files=None,globus_folders=None,cleanup=True):
 	globus = globusDataClass()
 	if not globus.globusLocalEndpointExistence:
 		local_id,setup_key = globus.createNewGlobusLocalEndpoint()
 
 		if 'linux' in sys.platform:
-			globus.startGlobusConnectPersonal()
+			globus_dir_name = globus.startGlobusConnectPersonal()
 		else:
 			print("Please paste the following key into the 'Setup Key' box in the Globus Connect Personal GUI: %s"%setup_key)
 			#wait?
@@ -123,6 +115,14 @@ def fetchGlobus(wait=True,globus_files=None,globus_folders=None):
 	globus.retrieveGlobusData(globus_files=globus_files,globus_folders=globus_folders)
 	print("Task submitted successfully, transferring...")
 	globus.waitForTransfer(globus.transfer_result['task_id'])
+	subprocess.call([os.path.join('.',globus_dir_name,'globusconnectpersonal'),'-setup',setup_key])
+	if cleanup:
+		globus_folders = glob.glob(os.path.join(os.getcwd(),'globusconnectpersonal-*'))
+		for f in globus_folders:
+			if 'tgz' in f:
+				os.remove(f)
+			else:
+				shutil.rmtree(f)
 
 def main():
 	fetchGlobus(globus_files=['README.txt'])
