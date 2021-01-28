@@ -79,7 +79,7 @@ if runProcess:
 	subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
 	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
 	os.chdir(os.path.abspath(_filedir_))
-	globus_folders = glob.glob(os.path.join(os.path.abspath(os.path.dirname(__file__)),'globusconnectpersonal-*'))
+	globus_folders = glob.glob(os.path.join(os.path.abspath(_filedir_),'globusconnectpersonal-*'))
 	print(globus_folders)
 	#for f in globus_folders:
 	#	shutil.rmtree(f)
