@@ -74,9 +74,11 @@ subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
 subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
 os.chdir(os.path.abspath(os.path.dirname(__file__)))
 globus_folders = glob.glob('globusconnectpersonal-*')
-for f in globus_folders:
-	shutil.rmtree(f)
+print(globus_folders)
+#for f in globus_folders:
+#	shutil.rmtree(f)
 
+print(local_ep_id)
 tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
 									local_ep_id)
 local_path = os.path.dirname(os.path.realpath(__file__))
