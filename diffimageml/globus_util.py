@@ -18,9 +18,9 @@ class globusDataClass():
 
 	@property
 	def globusLocalEndpointExistence(self):
-		local_id = self.transfer_client.endpoint_search(socket.gethostname())[0]['name']
 		success = False
 		try:
+			local_id = self.transfer_client.endpoint_search(socket.gethostname())[0]['name']
 			self.transfer_client.operation_ls(local_id)
 			self.local_ep_id = local_id
 			success = True
