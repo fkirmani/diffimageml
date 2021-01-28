@@ -53,7 +53,7 @@ tc = globus_sdk.TransferClient(authorizer=authorizer)
 #print(endpoint_id)
 #sys.exit()
 
-doCreate = True
+doCreate = False
 if doCreate:
 	print('local')
 	ep_data={'DATA_TYPE':"endpoint",'display_name':'midway',
@@ -66,7 +66,7 @@ if doCreate:
 	local_ep_id=uuid#local_ep.endpoint_id
 	
 	test = tc.endpoint_autoactivate(local_ep_id)
-sys.exit()
+#sys.exit()
 runProcess = False
 if runProcess:
 
