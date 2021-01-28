@@ -53,7 +53,17 @@ tc = globus_sdk.TransferClient(authorizer=authorizer)
 #print(endpoint_id)
 #sys.exit()
 
-doCreate = False
+runProcess = True
+if runProcess:
+
+	subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
+	subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
+	fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
+	os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
+	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
+	os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
+doCreate = True
 if doCreate:
 	print('local')
 	ep_data={'DATA_TYPE':"endpoint",'display_name':'midway',
@@ -67,15 +77,9 @@ if doCreate:
 	
 	test = tc.endpoint_autoactivate(local_ep_id)
 #sys.exit()
-local_ep_id='509e962e-619e-11eb-8c31-0eb1aa8d4337'
-runProcess = False
+#local_ep_id='509e962e-619e-11eb-8c31-0eb1aa8d4337'
 if runProcess:
-
-	subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
-	subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
-	fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
 	os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
-	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
 	subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
 	os.chdir(os.path.abspath(os.path.dirname(__file__)))
 	globus_folders = glob.glob(os.path.join(os.path.abspath(os.path.dirname(__file__)),'globusconnectpersonal-*'))
@@ -86,8 +90,8 @@ if runProcess:
 	print(local_ep_id)
 tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
 									local_ep_id)
-#local_path = os.path.dirname(os.path.realpath(__file__))
-local_path = '/project2/rkessler/SURVEYS/WFIRST/ROOT'
+local_path = os.path.dirname(os.path.realpath(__file__))
+#local_path = '/project2/rkessler/SURVEYS/WFIRST/ROOT'
 tdata.add_item("README.txt",os.path.join(local_path,'README.txt'))#"CodeBase/diffimageml/diffimageml/README.txt")
 transfer_result = tc.submit_transfer(tdata)
 print(transfer_result)
