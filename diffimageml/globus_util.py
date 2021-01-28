@@ -50,6 +50,7 @@ class globusDataClass():
 		new_dir = os.path.join(old_dir, fname)
 		os.chdir(new_dir)
 		subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
+		os.chdir(new_dir)
 		subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
 		os.chdir(old_dir)
 		if cleanup:
@@ -119,7 +120,6 @@ def fetchGlobus(wait=True,globus_files=None,globus_folders=None):
 	
 	globus.retrieveGlobusData(globus_files=globus_files,globus_folders=globus_folders)
 	print("Task submitted successfully, transferring...")
-	print(globus.transfer_result)
 	globus.waitForTransfer(globus.transfer_result['task_id'])
 
 def main():
