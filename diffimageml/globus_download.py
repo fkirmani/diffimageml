@@ -68,11 +68,22 @@ if doCreate:
 
 subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
 subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
-fname = glob.glob('globusconnectpersonal-*')[0]
+fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
 os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
 subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
 subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
+os.chdir(os.path.abspath(os.path.dirname(__file__)))
+globus_folders = glob.glob('globusconnectpersonal-*')
+for f in globus_folders:
+	shutil.rmtree(f)
 
+tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
+									local_ep_id)
+local_path = os.path.dirname(os.path.realpath(__file__))
+
+tdata.add_item("README.txt",os.path.join(local_path,'README.txt'))#"CodeBase/diffimageml/diffimageml/README.txt")
+transfer_result = tc.submit_transfer(tdata)
+print(transfer_result)
 sys.exit()
 if False:
 	print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
@@ -97,10 +108,4 @@ if False:
 			sys.exit()
 	print('Success! Copying...')
 
-tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
-									local_ep_id)
-local_path = os.path.dirname(os.path.realpath(__file__))
 
-tdata.add_item("README.txt",os.path.join(local_path,'README.txt'))#"CodeBase/diffimageml/diffimageml/README.txt")
-transfer_result = tc.submit_transfer(tdata)
-print(transfer_result)
