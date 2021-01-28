@@ -55,7 +55,10 @@ class globusDataClass():
 		if cleanup:
 			globus_folders = glob.glob(os.path.join(old_dir,'globusconnectpersonal-*'))
 			for f in globus_folders:
-				shutil.rmtree(f)
+				if 'tar.gz' in f:
+					os.remove(f)
+				else:
+					shutil.rmtree(f)
 	def getGlobusFiles(self):
 		return self.transfer_client.operation_ls(self.transfer_client.endpoint_search(DATA_ENDPOINT_NAME)[0]['name'])
 
