@@ -52,17 +52,8 @@ tc = globus_sdk.TransferClient(authorizer=authorizer)
 #endpoint_id = LocalGlobusConnectPersonal().endpoint_id
 #print(endpoint_id)
 #sys.exit()
-
+_filedir_ = os.path.dirname(__file__)
 runProcess = True
-if runProcess:
-
-	subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
-	subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
-	fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
-	os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
-	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
-	os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
 doCreate = True
 if doCreate:
 	print('local')
@@ -79,9 +70,15 @@ if doCreate:
 #sys.exit()
 #local_ep_id='509e962e-619e-11eb-8c31-0eb1aa8d4337'
 if runProcess:
-	os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
+	subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
+	subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
+	fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
+	new_dir=os.path.join(os.path.abspath(_filedir_), fname)
+	os.chdir(new_dir)
+	#os.chdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), fname))
 	subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
-	os.chdir(os.path.abspath(os.path.dirname(__file__)))
+	subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
+	os.chdir(os.path.abspath(_filedir_))
 	globus_folders = glob.glob(os.path.join(os.path.abspath(os.path.dirname(__file__)),'globusconnectpersonal-*'))
 	print(globus_folders)
 	#for f in globus_folders:
