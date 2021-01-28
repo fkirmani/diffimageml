@@ -57,7 +57,7 @@ runProcess = True
 doCreate = True
 if doCreate:
 	print('local')
-	ep_data={'DATA_TYPE':"endpoint",'display_name':'midway',
+	ep_data={'DATA_TYPE':"endpoint",'display_name':'fawad_cluster',
 				'is_globus_connect': True,
 				'myproxy_server': 'myproxy.globusonline.org'}#,'DATA':[{'DATA_TYPE':'local','hostname':'local'}]}
 	create_result = tc.create_endpoint(ep_data)
