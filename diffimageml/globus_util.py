@@ -45,7 +45,7 @@ class globusDataClass():
 			setup_key = self.setup_key
 		subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
 		subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
-		fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tar.gz' not in x][0]
+		fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tgz' not in x][0]
 		old_dir = os.getcwd()
 		new_dir = os.path.join(old_dir, fname)
 		os.chdir(new_dir)
@@ -55,7 +55,7 @@ class globusDataClass():
 		if cleanup:
 			globus_folders = glob.glob(os.path.join(old_dir,'globusconnectpersonal-*'))
 			for f in globus_folders:
-				if 'tar.gz' in f:
+				if 'tgz' in f:
 					os.remove(f)
 				else:
 					shutil.rmtree(f)
