@@ -86,8 +86,8 @@ if runProcess:
 	print(local_ep_id)
 tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
 									local_ep_id)
-local_path = os.path.dirname(os.path.realpath(__file__))
-
+#local_path = os.path.dirname(os.path.realpath(__file__))
+local_path = '/project2/rkessler/SURVEYS/WFIRST/ROOT'
 tdata.add_item("README.txt",os.path.join(local_path,'README.txt'))#"CodeBase/diffimageml/diffimageml/README.txt")
 transfer_result = tc.submit_transfer(tdata)
 print(transfer_result)
