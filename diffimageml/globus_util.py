@@ -115,7 +115,7 @@ def fetchGlobus(wait=True,globus_files=None,globus_folders=None,cleanup=True):
 	globus.retrieveGlobusData(globus_files=globus_files,globus_folders=globus_folders)
 	print("Task submitted successfully, transferring...")
 	globus.waitForTransfer(globus.transfer_result['task_id'])
-	subprocess.call([os.path.join('.',globus_dir_name,'globusconnectpersonal'),'-setup',setup_key])
+	subprocess.call([os.path.join('.',globus_dir_name,'globusconnectpersonal'),'-stop'])
 	if cleanup:
 		globus_folders = glob.glob(os.path.join(os.getcwd(),'globusconnectpersonal-*'))
 		for f in globus_folders:
