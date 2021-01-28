@@ -51,7 +51,8 @@ class globusDataClass():
 		#os.chdir(new_dir)
 		subprocess.call([os.path.join('.',new_dir,'globusconnectpersonal'),'-setup',setup_key])
 		print(os.path.join('.',new_dir,'globusconnectpersonal'))
-		subprocess.Popen([os.path.join('.',new_dir,'globusconnectpersonal'),'-start'],shell=False)
+		subprocess.Popen([os.path.join(new_dir,'globusconnectpersonal'),'-start'],shell=False)
+		print(os.path.join('.',new_dir,'globusconnectpersonal'))
 		#os.chdir(old_dir)
 		if cleanup:
 			globus_folders = glob.glob(os.path.join(old_dir,'globusconnectpersonal-*'))
