@@ -45,8 +45,7 @@ authorizer = globus_sdk.RefreshTokenAuthorizer(
 # and try using `tc` to make TransferClient calls. Everything should just
 # work -- for days and days, months and months, even years
 tc = globus_sdk.TransferClient(authorizer=authorizer)
-print(tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'])
-sys.exit()
+
 #from globus_sdk import LocalGlobusConnectPersonal
 
 # None if Globus Connect Personal is not installed
