@@ -48,11 +48,11 @@ class globusDataClass():
 		fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tgz' not in x][0]
 		old_dir = os.getcwd()
 		new_dir = os.path.join(old_dir, fname)
-		os.chdir(new_dir)
-		subprocess.call([r'./globusconnectpersonal','-setup',setup_key])
-		os.chdir(new_dir)
-		subprocess.Popen([r'./globusconnectpersonal','-start'],shell=False)
-		os.chdir(old_dir)
+		#os.chdir(new_dir)
+		subprocess.call([os.path.join('.',new_dir,'globusconnectpersonal'),'-setup',setup_key])
+		print(os.path.join('.',new_dir,'globusconnectpersonal'))
+		subprocess.Popen([os.path.join('.',new_dir,'globusconnectpersonal'),'-start'],shell=False)
+		#os.chdir(old_dir)
 		if cleanup:
 			globus_folders = glob.glob(os.path.join(old_dir,'globusconnectpersonal-*'))
 			for f in globus_folders:
