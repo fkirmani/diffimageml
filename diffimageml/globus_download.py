@@ -47,6 +47,7 @@ authorizer = globus_sdk.RefreshTokenAuthorizer(
 tc = globus_sdk.TransferClient(authorizer=authorizer)
 
 
+
 doCreate = True
 if doCreate:
 	print('local')
@@ -60,27 +61,27 @@ if doCreate:
 	local_ep_id=uuid#local_ep.endpoint_id
 	print(local_ep_id,setup_key)
 
-print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
-test = tc.endpoint_autoactivate(local_ep_id)
-sys.exit()
+	print('Please paste this key into your globus connect personal: {0}'.format(setup_key))
+	test = tc.endpoint_autoactivate(local_ep_id)
+	sys.exit()
 
-#wait?
-totaltime=3600
-total=0
-success = False
-import time
-while not success:
-	try:
-		test = tc.operation_ls(local_ep_id)
-		success = True
-	except:
-		success = False
-	time.sleep(5)
-	total+=5
-	if total>totaltime:
-		print('Waited an hour...giving up.')
-		sys.exit()
-print('Success! Copying...')
+	#wait?
+	totaltime=3600
+	total=0
+	success = False
+	import time
+	while not success:
+		try:
+			test = tc.operation_ls(local_ep_id)
+			success = True
+		except:
+			success = False
+		time.sleep(5)
+		total+=5
+		if total>totaltime:
+			print('Waited an hour...giving up.')
+			sys.exit()
+	print('Success! Copying...')
 
 tdata = globus_sdk.TransferData(tc,tc.endpoint_search('SC-SN-DATA on hyperion')[0]['name'],
 									local_ep_id)
