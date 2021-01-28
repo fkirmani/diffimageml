@@ -66,7 +66,7 @@ if doCreate:
 	local_ep_id=uuid#local_ep.endpoint_id
 	
 	test = tc.endpoint_autoactivate(local_ep_id)
-
+sys.exit()
 runProcess = False
 if runProcess:
 
