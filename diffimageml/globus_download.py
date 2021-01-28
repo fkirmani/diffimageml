@@ -1,6 +1,6 @@
 import globus_sdk
 from globus_sdk import AuthClient, AccessTokenAuthorizer,LocalGlobusConnectPersonal
-import sys,os,subprocess,glob
+import sys,os,subprocess,glob,shutil
 
 #jpierel
 #CLIENT_ID = 'e0aa9bd5-bb19-4110-9c2c-2a3bcdcdc04f'
