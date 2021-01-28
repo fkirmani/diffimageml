@@ -1,6 +1,6 @@
 import globus_sdk
 from globus_sdk import AuthClient, AccessTokenAuthorizer,LocalGlobusConnectPersonal
-import sys,os
+import sys,os,subprocess,glob
 
 #jpierel
 #CLIENT_ID = 'e0aa9bd5-bb19-4110-9c2c-2a3bcdcdc04f'
@@ -66,7 +66,6 @@ if doCreate:
 	
 	test = tc.endpoint_autoactivate(local_ep_id)
 
-import glob,os
 subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
 subprocess.call(['tar','xzf','globusconnectpersonal-latest.tgz'])
 fname = glob.glob('globusconnectpersonal-*')[0]
