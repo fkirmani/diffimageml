@@ -3,3 +3,4 @@ pytest-astropy
 matplotlib
 sphinx_gallery
 pyyaml
+globus_sdk

@@ -7,6 +7,9 @@ TRANSFER_AT = 'Ag9gMMV023lzy2xlrng8ax6WkY9590naJY24y45nj3vm2JbpPEupCeX1OdoQ482bd
 DATA_ENDPOINT_NAME = 'SC-SN-DATA on hyperion'
 
 class globusDataClass():
+	"""
+	A class to hold necessary Globus information.
+	"""
 	def __init__(self):
 		self.transfer_rt = TRANSFER_RT
 		self.transfer_at = TRANSFER_AT
@@ -18,6 +21,9 @@ class globusDataClass():
 
 	@property
 	def globusLocalEndpointExistence(self):
+		"""
+		Checks if a local endpoint already exists for your machine.
+		"""
 		success = False
 		try:
 			local_id = self.transfer_client.endpoint_search(socket.gethostname())[0]['name']
@@ -29,6 +35,22 @@ class globusDataClass():
 		return success
 
 	def createNewGlobusLocalEndpoint(self,ep_data=None):
+		"""
+		Creates a new local endpoint.
+
+		Parameters
+		----------
+		ep_data: dict
+			A dictionary of endpoint data.
+
+		Returns
+		-------
+		self.local_ep_id: str
+			The new local endpoint id
+		self.setup_key: str
+			The setup key for your local endpoint
+		"""
+
 		if ep_data is None:
 			ep_data = {'DATA_TYPE':"endpoint",'display_name':socket.gethostname(),
 						'is_globus_connect': True,
@@ -41,6 +63,19 @@ class globusDataClass():
 		return(self.local_ep_id,self.setup_key)
 
 	def startGlobusConnectPersonal(self,setup_key=None):
+		"""
+		If on linux, will download and start globus personal connect.
+
+		Parameters
+		----------
+		setup_key: str
+			The setup key for your local endpoint.
+
+		Returns
+		-------
+		new_dir: str
+			The directory containing the globus connect personal executable
+		"""
 		if setup_key is None:
 			setup_key = self.setup_key
 		subprocess.call(['wget','https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz'])
@@ -48,16 +83,33 @@ class globusDataClass():
 		fname = [x for x in glob.glob('globusconnectpersonal-*') if 'tgz' not in x][0]
 		old_dir = os.getcwd()
 		new_dir = os.path.join(old_dir, fname)
-		#os.chdir(new_dir)
 		subprocess.call([os.path.join('.',new_dir,'globusconnectpersonal'),'-setup',setup_key])
 		subprocess.Popen([os.path.join(new_dir,'globusconnectpersonal'),'-start'],shell=False)
 		return(new_dir)
 		
 		
 	def getGlobusFiles(self):
+		"""
+		Helper that retrieves all the folders/files in the remote directory
+		"""
 		return self.transfer_client.operation_ls(self.transfer_client.endpoint_search(DATA_ENDPOINT_NAME)[0]['name'])
 
 	def retrieveGlobusData(self,local_ep_id=None,local_path=None,globus_folders=None,globus_files=None):
+		"""
+		Actually submit the data transfer request.
+
+		Parameters
+		----------
+		local_ep_id: str
+			The local endpoint id
+		local_path: str
+			The path you would like to download the data to (default current)
+		globus_folders: list
+			List of individual folder names to download
+		globus_files: list
+			List of individual file names to download
+
+		"""
 		if local_ep_id is None:
 			local_ep_id = self.local_ep_id
 		tdata = globus_sdk.TransferData(self.transfer_client,self.transfer_client.endpoint_search(DATA_ENDPOINT_NAME)[0]['name'],
@@ -82,11 +134,39 @@ class globusDataClass():
 		
 		self.transfer_result = self.transfer_client.submit_transfer(tdata)
 
-	def waitForTransfer(self,task_id,wait=True,timeout=99999):
+	def waitForTransfer(self,task_id,timeout=99999):
+		"""
+		Waits for the task to complete (successfully or unsuccessfully)
+
+		Parameters
+		----------
+		task_id: str
+			The id of the submitted transfer task
+		timeout: int
+			The number of seconds to give up after (default essentially never)
+		"""
 		while not self.transfer_client.task_wait(task_id, timeout=timeout):
 			print("An hour went by without {0} terminating"
 					.format(task_id))
-def fetchGlobus(wait=True,globus_files=None,globus_folders=None,cleanup=True):
+
+def fetchGlobus(local_path=None,wait=True,globus_folders=None,globus_files=None,cleanup=True):
+	"""
+	Globus download pipeline.
+
+	Parameters
+	----------
+	local_path: str
+		The path you would like to download the data to (default current)
+	wait: bool
+		If True, the code will wait for the download to finish
+	globus_folders: list
+			List of individual folder names to download
+	globus_files: list
+		List of individual file names to download
+	cleanup: bool
+		If True, delete the globus personal connect downloads (Linux only)
+	"""
+	
 	globus = globusDataClass()
 	if not globus.globusLocalEndpointExistence:
 		local_id,setup_key = globus.createNewGlobusLocalEndpoint()
@@ -114,7 +194,7 @@ def fetchGlobus(wait=True,globus_files=None,globus_folders=None,cleanup=True):
 	elif 'linux' in sys.platform:
 		globus_dir_name = globus.startGlobusConnectPersonal()
 
-	globus.retrieveGlobusData(globus_files=globus_files,globus_folders=globus_folders)
+	globus.retrieveGlobusData(local_path=local_path,globus_files=globus_files,globus_folders=globus_folders)
 	print("Task submitted successfully, transferring...")
 	globus.waitForTransfer(globus.transfer_result['task_id'])
 	subprocess.call([os.path.join('.',globus_dir_name,'globusconnectpersonal'),'-stop'])
