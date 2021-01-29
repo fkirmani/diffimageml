@@ -8,6 +8,7 @@ from keras.layers import Dense
 from keras.layers import Flatten
 from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
+from keras.layers import Dropout
  
 # define cnn model
 def define_model_1():
@@ -23,6 +24,20 @@ def define_model_1():
     model.compile(optimizer=opt, loss='binary_crossentropy', metrics=['accuracy'])
     return model
  
+def define_model_1_dropout():
+    model = Sequential()
+    model.add(Dropout(0.2))
+    model.add(Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same', input_shape=(200, 200, 3)))
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Dropout(0.2))
+    model.add(Flatten())
+    model.add(Dense(128, activation='relu', kernel_initializer='he_uniform'))
+    model.add(Dropout(0.5))
+    model.add(Dense(1, activation='sigmoid'))
+    opt = SGD(lr=0.001, momentum=0.9)
+    model.compile(optimizer=opt, loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+    
 def define_model_2():
     
     #Two Block CNN
@@ -90,22 +105,33 @@ def summarize_diagnostics(history):
 # run the test harness for evaluating a model
 def run_test_harness():
     # define model
-    model = VGG16()
+    model = define_model_2()
     # create data generator
     datagen = ImageDataGenerator(rescale=1.0/255.0)
+    
+    ##With Image Augmentation
+    train_datagen = ImageDataGenerator(rescale=1.0/255.0, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
     # prepare iterators
-    train_it = datagen.flow_from_directory('dataset_dogs_vs_cats/train/',
-        class_mode='binary', batch_size=64, target_size=(200, 200))
+    
+    ##Without Augmentation
+    #train_it = datagen.flow_from_directory('dataset_dogs_vs_cats/train/', class_mode='binary', batch_size=64, target_size=(200, 200))
+
+    ##With Augmentation
+    train_it = train_datagen.flow_from_directory('dataset_dogs_vs_cats/train/', class_mode='binary', batch_size=64, target_size=(200, 200))
+    
+    
     test_it = datagen.flow_from_directory('dataset_dogs_vs_cats/test/',
         class_mode='binary', batch_size=64, target_size=(200, 200))
     # fit model
     history = model.fit_generator(train_it, steps_per_epoch=len(train_it),
-        validation_data=test_it, validation_steps=len(test_it), epochs=20, verbose=1)
+        validation_data=test_it, validation_steps=len(test_it), epochs=30, verbose=1)
     # evaluate model
     _, acc = model.evaluate_generator(test_it, steps=len(test_it), verbose=0)
     print('> %.3f' % (acc * 100.0))
     # learning curves
     summarize_diagnostics(history)
+    
+    model.save('final_model.h5')
  
 
 run_test_harness()
