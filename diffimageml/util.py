@@ -16,7 +16,6 @@ import itertools
 
 import PIL
 from PIL import Image
-import cv2
 
 def get_example_data():
     """Returns a dict with the filepath for each of the input images used

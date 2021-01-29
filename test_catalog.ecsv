@@ -1,0 +1,568 @@
+# %ECSV 0.9
+# ---
+# datatype:
+# - {name: x, datatype: object}
+# - {name: y, datatype: object}
+# - {name: Source Properties, datatype: object}
+# schema: astropy-2.0
+x y "Source Properties"
+"1031.6063972484471 pix" "92.92266261926271 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 17
+centroid (x, y): (1031.6064, 92.9227)
+sky_centroid: None"
+"969.8779461076414 pix" "114.82849523993883 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 22
+centroid (x, y): (969.8779, 114.8285)
+sky_centroid: None"
+"2415.5298163383577 pix" "131.05664600670073 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 26
+centroid (x, y): (2415.5298, 131.0566)
+sky_centroid: None"
+"3827.3686766001065 pix" "163.28819549559557 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 39
+centroid (x, y): (3827.3687, 163.2882)
+sky_centroid: None"
+"2006.5298842025516 pix" "189.09325468096998 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 44
+centroid (x, y): (2006.5299, 189.0933)
+sky_centroid: None"
+"3398.308461333932 pix" "206.97490339123343 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 46
+centroid (x, y): (3398.3085, 206.9749)
+sky_centroid: None"
+"1128.258798463612 pix" "241.1126513930279 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 55
+centroid (x, y): (1128.2588, 241.1127)
+sky_centroid: None"
+"3073.224044930524 pix" "244.5541208046668 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 56
+centroid (x, y): (3073.2240, 244.5541)
+sky_centroid: None"
+"2728.6262856628327 pix" "270.631777057849 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 61
+centroid (x, y): (2728.6263, 270.6318)
+sky_centroid: None"
+"2777.747117078073 pix" "282.25507956503304 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 63
+centroid (x, y): (2777.7471, 282.2551)
+sky_centroid: None"
+"2525.7623408302466 pix" "305.6390030167123 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 67
+centroid (x, y): (2525.7623, 305.6390)
+sky_centroid: None"
+"1502.9791844037368 pix" "319.02198134426743 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 70
+centroid (x, y): (1502.9792, 319.0220)
+sky_centroid: None"
+"3179.5743302303686 pix" "325.00009352984324 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 71
+centroid (x, y): (3179.5743, 325.0001)
+sky_centroid: None"
+"904.98803553521 pix" "353.25587204875995 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 84
+centroid (x, y): (904.9880, 353.2559)
+sky_centroid: None"
+"3900.0998588781645 pix" "370.8680941516768 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 90
+centroid (x, y): (3900.0999, 370.8681)
+sky_centroid: None"
+"1599.484549226558 pix" "438.0392133098772 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 101
+centroid (x, y): (1599.4845, 438.0392)
+sky_centroid: None"
+"1921.5970234741371 pix" "468.1664893154134 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 108
+centroid (x, y): (1921.5970, 468.1665)
+sky_centroid: None"
+"635.2366098528047 pix" "486.6407085951837 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 111
+centroid (x, y): (635.2366, 486.6407)
+sky_centroid: None"
+"797.7776092042346 pix" "495.0528802223264 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 117
+centroid (x, y): (797.7776, 495.0529)
+sky_centroid: None"
+"2872.863775362904 pix" "499.5513026867828 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 120
+centroid (x, y): (2872.8638, 499.5513)
+sky_centroid: None"
+"3665.405594737486 pix" "533.3687321742516 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 126
+centroid (x, y): (3665.4056, 533.3687)
+sky_centroid: None"
+"691.522985412188 pix" "564.6089945382662 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 136
+centroid (x, y): (691.5230, 564.6090)
+sky_centroid: None"
+"686.5883067480617 pix" "601.0401728630247 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 144
+centroid (x, y): (686.5883, 601.0402)
+sky_centroid: None"
+"1145.5856702977412 pix" "604.67289989794 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 146
+centroid (x, y): (1145.5857, 604.6729)
+sky_centroid: None"
+"1185.3968997053382 pix" "628.4018016788664 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 154
+centroid (x, y): (1185.3969, 628.4018)
+sky_centroid: None"
+"3450.1499311185344 pix" "633.0856749953997 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 157
+centroid (x, y): (3450.1499, 633.0857)
+sky_centroid: None"
+"882.5888527718095 pix" "661.539091275755 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 168
+centroid (x, y): (882.5889, 661.5391)
+sky_centroid: None"
+"1233.0775686450547 pix" "703.4963120320722 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 177
+centroid (x, y): (1233.0776, 703.4963)
+sky_centroid: None"
+"3211.675281128198 pix" "766.930877025183 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 191
+centroid (x, y): (3211.6753, 766.9309)
+sky_centroid: None"
+"592.9004817129754 pix" "886.1334656021417 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 211
+centroid (x, y): (592.9005, 886.1335)
+sky_centroid: None"
+"258.60286746873356 pix" "905.6249918461273 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 218
+centroid (x, y): (258.6029, 905.6250)
+sky_centroid: None"
+"1855.1123520444244 pix" "1032.6572912166025 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 251
+centroid (x, y): (1855.1124, 1032.6573)
+sky_centroid: None"
+"312.46769736408146 pix" "1063.3005895676613 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 256
+centroid (x, y): (312.4677, 1063.3006)
+sky_centroid: None"
+"3646.2687253091817 pix" "1079.8054463119993 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 261
+centroid (x, y): (3646.2687, 1079.8054)
+sky_centroid: None"
+"1647.9692902011057 pix" "1128.9240611026305 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 272
+centroid (x, y): (1647.9693, 1128.9241)
+sky_centroid: None"
+"3704.102663806065 pix" "1129.7055535999473 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 274
+centroid (x, y): (3704.1027, 1129.7056)
+sky_centroid: None"
+"458.0178570609163 pix" "1161.4113839641993 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 283
+centroid (x, y): (458.0179, 1161.4114)
+sky_centroid: None"
+"231.66349155674789 pix" "1160.9919482914793 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 284
+centroid (x, y): (231.6635, 1160.9919)
+sky_centroid: None"
+"3253.374352111857 pix" "1175.4861913497712 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 288
+centroid (x, y): (3253.3744, 1175.4862)
+sky_centroid: None"
+"252.55848376862247 pix" "1226.0597782178775 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 298
+centroid (x, y): (252.5585, 1226.0598)
+sky_centroid: None"
+"3830.2251187598736 pix" "1233.689104329058 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 301
+centroid (x, y): (3830.2251, 1233.6891)
+sky_centroid: None"
+"4017.5215098293716 pix" "1260.0784165002967 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 308
+centroid (x, y): (4017.5215, 1260.0784)
+sky_centroid: None"
+"352.41894566994705 pix" "1324.5469675312227 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 325
+centroid (x, y): (352.4189, 1324.5470)
+sky_centroid: None"
+"3045.2679907157453 pix" "1386.1960008310457 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 338
+centroid (x, y): (3045.2680, 1386.1960)
+sky_centroid: None"
+"2904.9607272264543 pix" "1402.5921757831297 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 342
+centroid (x, y): (2904.9607, 1402.5922)
+sky_centroid: None"
+"219.94320418228025 pix" "1433.3257948862165 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 350
+centroid (x, y): (219.9432, 1433.3258)
+sky_centroid: None"
+"1655.7290110240212 pix" "1503.989584945444 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 369
+centroid (x, y): (1655.7290, 1503.9896)
+sky_centroid: None"
+"151.87347054108704 pix" "1577.8160297208428 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 397
+centroid (x, y): (151.8735, 1577.8160)
+sky_centroid: None"
+"554.2323310799724 pix" "1575.9158451516287 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 398
+centroid (x, y): (554.2323, 1575.9158)
+sky_centroid: None"
+"2126.874866168465 pix" "1581.7942086561839 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 402
+centroid (x, y): (2126.8749, 1581.7942)
+sky_centroid: None"
+"2057.541987989602 pix" "1605.4372082941302 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 404
+centroid (x, y): (2057.5420, 1605.4372)
+sky_centroid: None"
+"3886.427676609816 pix" "1637.13766393261 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 415
+centroid (x, y): (3886.4277, 1637.1377)
+sky_centroid: None"
+"2203.741288250375 pix" "1681.6896905976773 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 425
+centroid (x, y): (2203.7413, 1681.6897)
+sky_centroid: None"
+"3694.7297217718506 pix" "1690.4271845969843 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 427
+centroid (x, y): (3694.7297, 1690.4272)
+sky_centroid: None"
+"3486.751156911681 pix" "1775.8205647742843 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 454
+centroid (x, y): (3486.7512, 1775.8206)
+sky_centroid: None"
+"3865.0344404533716 pix" "1841.1288845756067 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 464
+centroid (x, y): (3865.0344, 1841.1289)
+sky_centroid: None"
+"3785.755394116337 pix" "1941.231802597351 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 485
+centroid (x, y): (3785.7554, 1941.2318)
+sky_centroid: None"
+"647.0417979169334 pix" "1934.8092409988737 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 490
+centroid (x, y): (647.0418, 1934.8092)
+sky_centroid: None"
+"221.28228524381632 pix" "1995.7835334067818 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 503
+centroid (x, y): (221.2823, 1995.7835)
+sky_centroid: None"
+"3159.454925677419 pix" "2005.4893348582636 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 506
+centroid (x, y): (3159.4549, 2005.4893)
+sky_centroid: None"
+"3674.6348357703564 pix" "2047.0558627109278 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 512
+centroid (x, y): (3674.6348, 2047.0559)
+sky_centroid: None"
+"2012.5143815998163 pix" "2053.4147790006427 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 517
+centroid (x, y): (2012.5144, 2053.4148)
+sky_centroid: None"
+"3455.4510875299948 pix" "2125.7577905983994 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 536
+centroid (x, y): (3455.4511, 2125.7578)
+sky_centroid: None"
+"3557.211834029727 pix" "2141.5076384771955 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 539
+centroid (x, y): (3557.2118, 2141.5076)
+sky_centroid: None"
+"3850.8601316403115 pix" "2148.1076679977273 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 541
+centroid (x, y): (3850.8601, 2148.1077)
+sky_centroid: None"
+"250.04144732605442 pix" "2215.6643640921197 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 553
+centroid (x, y): (250.0414, 2215.6644)
+sky_centroid: None"
+"1277.728639976091 pix" "2216.394057124256 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 556
+centroid (x, y): (1277.7286, 2216.3941)
+sky_centroid: None"
+"4008.22223295924 pix" "2260.616987685211 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 567
+centroid (x, y): (4008.2222, 2260.6170)
+sky_centroid: None"
+"630.3309623782372 pix" "2352.7464290424646 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 585
+centroid (x, y): (630.3310, 2352.7464)
+sky_centroid: None"
+"1876.781437439727 pix" "2347.5328395196157 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 586
+centroid (x, y): (1876.7814, 2347.5328)
+sky_centroid: None"
+"1808.0261060575133 pix" "2386.2686642300087 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 593
+centroid (x, y): (1808.0261, 2386.2687)
+sky_centroid: None"
+"3883.816307332859 pix" "2387.9103424812606 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 598
+centroid (x, y): (3883.8163, 2387.9103)
+sky_centroid: None"
+"1867.6938665474336 pix" "2400.383698485008 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 603
+centroid (x, y): (1867.6939, 2400.3837)
+sky_centroid: None"
+"1689.6787022253804 pix" "2406.1710229542023 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 605
+centroid (x, y): (1689.6787, 2406.1710)
+sky_centroid: None"
+"580.3699436639869 pix" "2453.509797817629 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 609
+centroid (x, y): (580.3699, 2453.5098)
+sky_centroid: None"
+"3858.3590174398596 pix" "2445.264854225665 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 614
+centroid (x, y): (3858.3590, 2445.2649)
+sky_centroid: None"
+"2818.142382136408 pix" "2467.6126299959874 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 620
+centroid (x, y): (2818.1424, 2467.6126)
+sky_centroid: None"
+"2311.4913288047464 pix" "2483.01143212535 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 622
+centroid (x, y): (2311.4913, 2483.0114)
+sky_centroid: None"
+"2354.2992264540244 pix" "2498.340616963431 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 629
+centroid (x, y): (2354.2992, 2498.3406)
+sky_centroid: None"
+"1267.1243113844928 pix" "2507.7621993721536 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 634
+centroid (x, y): (1267.1243, 2507.7622)
+sky_centroid: None"
+"3692.9688175115566 pix" "2513.0704684777256 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 636
+centroid (x, y): (3692.9688, 2513.0705)
+sky_centroid: None"
+"1938.0539950532739 pix" "2596.1031599787407 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 659
+centroid (x, y): (1938.0540, 2596.1032)
+sky_centroid: None"
+"1098.9967013884975 pix" "2617.3262353807536 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 665
+centroid (x, y): (1098.9967, 2617.3262)
+sky_centroid: None"
+"3038.0767700648857 pix" "2675.567854243417 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 676
+centroid (x, y): (3038.0768, 2675.5679)
+sky_centroid: None"
+"236.47696051494324 pix" "2717.931950264827 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 687
+centroid (x, y): (236.4770, 2717.9320)
+sky_centroid: None"
+"63.63938878307486 pix" "2727.43695786711 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 692
+centroid (x, y): (63.6394, 2727.4370)
+sky_centroid: None"
+"2120.1171904614903 pix" "2763.6518967216 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 704
+centroid (x, y): (2120.1172, 2763.6519)
+sky_centroid: None"
+"1457.1724610004826 pix" "2775.4848451140897 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 708
+centroid (x, y): (1457.1725, 2775.4848)
+sky_centroid: None"
+"2379.052443339628 pix" "2819.0573631418674 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 719
+centroid (x, y): (2379.0524, 2819.0574)
+sky_centroid: None"
+"3529.488707210393 pix" "2842.6823502689385 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 725
+centroid (x, y): (3529.4887, 2842.6824)
+sky_centroid: None"
+"3015.676600148505 pix" "2870.0115713837713 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 732
+centroid (x, y): (3015.6766, 2870.0116)
+sky_centroid: None"
+"223.6779479284684 pix" "2882.9432404919385 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 740
+centroid (x, y): (223.6779, 2882.9432)
+sky_centroid: None"
+"1571.6191154087371 pix" "2896.976435356533 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 746
+centroid (x, y): (1571.6191, 2896.9764)
+sky_centroid: None"
+"1347.633101185973 pix" "2908.4061231983674 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 748
+centroid (x, y): (1347.6331, 2908.4061)
+sky_centroid: None"
+"3304.0057469270114 pix" "2912.9238374185456 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 749
+centroid (x, y): (3304.0057, 2912.9238)
+sky_centroid: None"
+"746.0985408281916 pix" "2925.2149324935667 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 757
+centroid (x, y): (746.0985, 2925.2149)
+sky_centroid: None"
+"1491.4132985984324 pix" "2927.4604647303286 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 758
+centroid (x, y): (1491.4133, 2927.4605)
+sky_centroid: None"
+"3956.3400296989994 pix" "2967.385351037731 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 763
+centroid (x, y): (3956.3400, 2967.3854)
+sky_centroid: None"
+"1637.3694348902072 pix" "3006.1640406419688 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 773
+centroid (x, y): (1637.3694, 3006.1640)
+sky_centroid: None"
+"2817.512167256334 pix" "3016.7409715276435 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 777
+centroid (x, y): (2817.5122, 3016.7410)
+sky_centroid: None"
+"2124.1144564764904 pix" "3039.250849575547 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 780
+centroid (x, y): (2124.1145, 3039.2508)
+sky_centroid: None"
+"97.32061233417532 pix" "3035.535855357293 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 783
+centroid (x, y): (97.3206, 3035.5359)
+sky_centroid: None"
+"1225.8978551566254 pix" "3061.1508249509566 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 785
+centroid (x, y): (1225.8979, 3061.1508)
+sky_centroid: None"
+"1112.4766693930435 pix" "3057.990787925118 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 789
+centroid (x, y): (1112.4767, 3057.9908)
+sky_centroid: None"
+"559.4453558231912 pix" "3142.447936127883 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 808
+centroid (x, y): (559.4454, 3142.4479)
+sky_centroid: None"
+"3955.0465357485878 pix" "3206.3701785008325 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 816
+centroid (x, y): (3955.0465, 3206.3702)
+sky_centroid: None"
+"3317.0910815481666 pix" "3194.5523631268343 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 824
+centroid (x, y): (3317.0911, 3194.5524)
+sky_centroid: None"
+"655.638462406915 pix" "3231.370862597882 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 838
+centroid (x, y): (655.6385, 3231.3709)
+sky_centroid: None"
+"2917.7787252461926 pix" "3325.5518702869367 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 868
+centroid (x, y): (2917.7787, 3325.5519)
+sky_centroid: None"
+"846.5994983934403 pix" "3371.2548655630235 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 884
+centroid (x, y): (846.5995, 3371.2549)
+sky_centroid: None"
+"1644.0362426143631 pix" "3384.8292305875866 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 886
+centroid (x, y): (1644.0362, 3384.8292)
+sky_centroid: None"
+"636.1314171520557 pix" "3378.2835284296443 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 887
+centroid (x, y): (636.1314, 3378.2835)
+sky_centroid: None"
+"945.7547498135809 pix" "3448.99157626447 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 904
+centroid (x, y): (945.7547, 3448.9916)
+sky_centroid: None"
+"1743.862236585572 pix" "3435.48161046262 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 914
+centroid (x, y): (1743.8622, 3435.4816)
+sky_centroid: None"
+"1717.336743083792 pix" "3454.335887092426 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 920
+centroid (x, y): (1717.3367, 3454.3359)
+sky_centroid: None"
+"2168.686662254536 pix" "3456.108078547302 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 922
+centroid (x, y): (2168.6867, 3456.1081)
+sky_centroid: None"
+"565.7142451377144 pix" "3498.2837083275404 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 932
+centroid (x, y): (565.7142, 3498.2837)
+sky_centroid: None"
+"887.6011556449048 pix" "3544.2919820069733 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 952
+centroid (x, y): (887.6012, 3544.2920)
+sky_centroid: None"
+"3311.894642517737 pix" "3608.408426207381 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 962
+centroid (x, y): (3311.8946, 3608.4084)
+sky_centroid: None"
+"1623.0758321458973 pix" "3578.761653350889 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 966
+centroid (x, y): (1623.0758, 3578.7617)
+sky_centroid: None"
+"341.81436472683555 pix" "3582.286132724473 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 968
+centroid (x, y): (341.8144, 3582.2861)
+sky_centroid: None"
+"1944.9087101596401 pix" "3595.3819119843142 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 973
+centroid (x, y): (1944.9087, 3595.3819)
+sky_centroid: None"
+"1277.3913170417507 pix" "3617.0860968050233 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 977
+centroid (x, y): (1277.3913, 3617.0861)
+sky_centroid: None"
+"1151.4414014382296 pix" "3628.267424825817 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 986
+centroid (x, y): (1151.4414, 3628.2674)
+sky_centroid: None"
+"1811.419226052581 pix" "3669.977187472509 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 999
+centroid (x, y): (1811.4192, 3669.9772)
+sky_centroid: None"
+"1826.5888135254893 pix" "3683.266893419151 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1000
+centroid (x, y): (1826.5888, 3683.2669)
+sky_centroid: None"
+"1693.2823991794687 pix" "3749.672176820527 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1018
+centroid (x, y): (1693.2824, 3749.6722)
+sky_centroid: None"
+"2449.056257253771 pix" "3787.5132791096908 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1027
+centroid (x, y): (2449.0563, 3787.5133)
+sky_centroid: None"
+"117.0176817235727 pix" "3789.935588594804 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1028
+centroid (x, y): (117.0177, 3789.9356)
+sky_centroid: None"
+"2381.6677934219047 pix" "3801.452747450221 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1032
+centroid (x, y): (2381.6678, 3801.4527)
+sky_centroid: None"
+"3098.514705928344 pix" "3801.853595235081 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1033
+centroid (x, y): (3098.5147, 3801.8536)
+sky_centroid: None"
+"1701.5551206297223 pix" "3842.631990087788 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1043
+centroid (x, y): (1701.5551, 3842.6320)
+sky_centroid: None"
+"2310.4385633471034 pix" "3876.7649390597817 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1055
+centroid (x, y): (2310.4386, 3876.7649)
+sky_centroid: None"
+"3915.6475358285857 pix" "3896.8013028413584 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1063
+centroid (x, y): (3915.6475, 3896.8013)
+sky_centroid: None"
+"1208.1777954317506 pix" "3920.6210232218186 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1074
+centroid (x, y): (1208.1778, 3920.6210)
+sky_centroid: None"
+"1435.4098178309757 pix" "3971.5791634859793 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1082
+centroid (x, y): (1435.4098, 3971.5792)
+sky_centroid: None"
+"3061.383263619657 pix" "3948.4967985426965 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1084
+centroid (x, y): (3061.3833, 3948.4968)
+sky_centroid: None"
+"671.3793301956679 pix" "3954.4143485250456 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1087
+centroid (x, y): (671.3793, 3954.4143)
+sky_centroid: None"
+"3493.451214692143 pix" "4018.3863278028643 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1104
+centroid (x, y): (3493.4512, 4018.3863)
+sky_centroid: None"
+"2756.1966275851805 pix" "4040.336511772129 pix" "<photutils.segmentation.properties.SourceProperties>
+label: 1112
+centroid (x, y): (2756.1966, 4040.3365)
+sky_centroid: None"
