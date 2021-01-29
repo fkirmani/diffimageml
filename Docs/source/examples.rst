@@ -31,7 +31,9 @@ Or a specific file:
 Mac or Windows
 ==============
 
-Things are one step more complicated for Mac/Windows, since there is no Globus downloadable source for these platforms. Instead, you'll need to install Globus Connect Personal yourself following the directions `here for Mac <https://docs.globus.org/how-to/globus-connect-personal-mac/>`_ or `here for Windows <https://docs.globus.org/how-to/globus-connect-personal-windows/>`_. Once you go through the istallation process on either platform, DO NOT LOGIN. When you open Globus Connect Personal after installing, you should see a window that looks like this:
+Things are one step more complicated for Mac/Windows, since there is no Globus downloadable source for these platforms, but they should only have to happen once. Once you go through the steps below, you'll only need to open Globus Connect Personal in the future and run the python code at the bottom of this page to download new data. 
+
+You'll need to install Globus Connect Personal yourself following the directions `here for Mac <https://docs.globus.org/how-to/globus-connect-personal-mac/>`_ or `here for Windows <https://docs.globus.org/how-to/globus-connect-personal-windows/>`_. Once you go through the istallation process on either platform, DO NOT LOGIN. When you open Globus Connect Personal after installing, you should see a window that looks like this:
 
 .. image:: _static/globus_window.png
     :width: 600px
