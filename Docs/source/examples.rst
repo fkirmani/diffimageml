@@ -65,3 +65,14 @@ Now you can run the same code that worked for Linux (with the same options above
     diffimageml.fetchGlobus()
 
 The code will identify that you are on a Mac/Windows machine, and print a Setup Key that it asks you to paste into your Globus Connect Personal window. Paste this into the Setup Key window visible in the final screenshot above, and hit Submit. A few seconds later it should tell you that the setup was complete, and you should then hit the exit button that appears. The code will recognize that this step was completed (it will wait up to 5 minutes for you to complete this step), and then proceed with the download. 
+
+*************************
+Uploading Data via Globus
+*************************
+
+Follow the same directions as for downloading from Globus, except please use the following function instead (see documentation for details)
+
+.. code-block:: python
+
+    import diffimageml
+    diffimageml.uploadToGlobus(upload_files=['my_file_to_upload.txt'])

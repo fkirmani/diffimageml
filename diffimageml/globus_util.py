@@ -94,6 +94,32 @@ class globusDataClass():
 		"""
 		return self.transfer_client.operation_ls(self.transfer_client.endpoint_search(DATA_ENDPOINT_NAME)[0]['name'])
 
+	def uploadGlobusData(self,upload_files=None,upload_folders=None):
+		"""
+		Actually submit the upload request.
+
+		Parameters
+		----------
+		upload_folders: list
+			List of individual folder names to download
+		upload_files: list
+			List of individual file names to download
+
+		"""
+		tdata = globus_sdk.TransferData(self.transfer_client,self.local_ep_id,
+									    self.transfer_client.endpoint_search(DATA_ENDPOINT_NAME)[0]['name'])
+		
+		if upload_files is not None:
+			for f in upload_files:
+				tdata.add_item(os.path.abspath(f),os.path.basename(f),recursive=False)	
+		else:
+			for f in upload_folders:
+				tdata.add_item(os.path.abspath(f),os.path.basename(f),recursive=True)	
+		
+		self.transfer_result = self.transfer_client.submit_transfer(tdata)
+
+
+
 	def retrieveGlobusData(self,local_ep_id=None,local_path=None,globus_folders=None,globus_files=None):
 		"""
 		Actually submit the data transfer request.
@@ -149,6 +175,73 @@ class globusDataClass():
 			print("An hour went by without {0} terminating"
 					.format(task_id))
 
+def uploadToGlobus(upload_files=None,upload_folders=None):
+	"""
+	Globus upload pipeline
+
+	Parameters
+	----------
+	upload_files: list
+		A list of filenames to upload
+	upload_folders: list
+		A list of folder names to upload
+	"""
+
+	if upload_files is None and upload_folders is None:
+		print('Need to supply some files and/or folders.')
+		sys.exit()
+
+	if upload_files is not None:
+		if isinstance(upload_files,str):
+			upload_files = [upload_files]
+
+	if upload_folders is not None:
+		if isinstance(upload_folders,str):
+			upload_folders = [upload_folders]
+
+	globus = globusDataClass()
+	if not globus.globusLocalEndpointExistence:
+		mustCreateLocal = True
+		local_id,setup_key = globus.createNewGlobusLocalEndpoint()
+
+		if 'linux' in sys.platform:
+			globus_dir_name = globus.startGlobusConnectPersonal()
+		else:
+			print("Please paste the following key into the 'Setup Key' box in the Globus Connect Personal GUI: %s"%setup_key)
+			#wait?
+			totaltime=300
+			total=0
+			success = False
+			while not success:
+				try:
+					test = globus.transfer_client.operation_ls(local_id)
+					success = True
+				except:
+					success = False
+				time.sleep(5)
+				total+=5
+				if total>totaltime:
+					print('Waited 5 minutes...giving up.')
+					sys.exit()
+			print('Success! Continuing...')
+	elif 'linux' in sys.platform:
+		mustCreateLocal = False
+		globus_dir_name = globus.startGlobusConnectPersonal()
+	else:
+		mustCreateLocal = False
+	globus.uploadGlobusData(upload_files=upload_files,upload_folders=upload_folders)
+	print("Task submitted successfully, transferring...")
+	globus.waitForTransfer(globus.transfer_result['task_id'])
+	if mustCreateLocal:
+		subprocess.call([os.path.join('.',globus_dir_name,'globusconnectpersonal'),'-stop'])
+		if cleanup:
+			globus_folders = glob.glob(os.path.join(os.getcwd(),'globusconnectpersonal-*'))
+			for f in globus_folders:
+				if 'tgz' in f:
+					os.remove(f)
+				else:
+					shutil.rmtree(f)
+
 def fetchGlobus(local_path=None,wait=True,globus_folders=None,globus_files=None,cleanup=True):
 	"""
 	Globus download pipeline.
@@ -166,7 +259,7 @@ def fetchGlobus(local_path=None,wait=True,globus_folders=None,globus_files=None,
 	cleanup: bool
 		If True, delete the globus personal connect downloads (Linux only)
 	"""
-	
+
 	globus = globusDataClass()
 	if not globus.globusLocalEndpointExistence:
 		local_id,setup_key = globus.createNewGlobusLocalEndpoint()
@@ -207,6 +300,7 @@ def fetchGlobus(local_path=None,wait=True,globus_folders=None,globus_files=None,
 				shutil.rmtree(f)
 
 def main():
+	#uploadToGlobus(upload_files=['globus_util.py'])
 	fetchGlobus(globus_files=['README.txt'])
 
 if __name__ == '__main__':
