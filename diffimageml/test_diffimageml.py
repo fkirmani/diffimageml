@@ -6,7 +6,6 @@ from astropy.table import Table
 _SRCDIR_ = os.path.abspath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),'..'))
 sys.path.append(_SRCDIR_)
-import util
 import diffimageml
 
 # Hard coding the test data filenames
@@ -223,7 +222,7 @@ class TestSourceDetection(unittest.TestCase):
         
         target = False
         
-        catalog = util.read_catalog("test_catalog.ecsv")
+        catalog = diffimageml.util.read_catalog("test_catalog.ecsv")
         
         for i in catalog:
             if np.sqrt( (float(i['x'].split()[0]) - pixel_x) ** 2 + (float(i['y'].split()[0]) - pixel_y) ** 2 ) < 10:
@@ -251,7 +250,7 @@ class TestMachineLearning(unittest.TestCase):
         return
 
     def test_image_preprocessing(self):
-        exampledatadict = util.get_example_data()
+        exampledatadict = diffimageml.util.get_example_data()
         inputdatadir = exampledatadict['cnninputdatadir1']
         self.tripletneuralnet.preprocess_input_images(datadir=inputdatadir)
         # TODO : add a useful completeness check

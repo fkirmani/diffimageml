@@ -18,7 +18,4 @@ Summary
 .. automodule:: diffimageml.fakeplanting
    :members:
 
-|
-
-.. automodule:: diffimageml.globus_util
-   :members:
+      

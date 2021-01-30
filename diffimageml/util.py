@@ -601,27 +601,34 @@ def read_catalog(filename):
     catalog = Table.read(filename , format = file_format)
     return catalog
     
-def fits_rgb_png(mef , savefilename = None , show = False):
+def fits_rgb_png(mef , savefilename = None , rescale = False):
     '''
     Function to combine three fits images into a single RGB png file
     Assignes the difference image to be red, the search image to green
-    and the template image to blue
+    and the template image to blue. Note that if rescale is set to False, then
+    the images may appear blank, as the largest pixel values inside the fits images
+    may be much less than the max allowed pixel value, so when viewed the images appear
+    to be solid black. rescale = True eliminates this problem by rescaling the fits file
+    data.
     
     Parameters
     __________
     
-    mef: This is a multi-extention fits file. Should include a difference image,
+    mef: This can be a multi-extention fits file. Should include a difference image,
         search image and template image.
+        Can also be a list of FitsImage objects or a FakePlanter object
         
     savefilename: str : If None, do not save resulting png file to disk. Otherwise, save
         resulting png to this filename
     
-    show: boolean : If True, then show the resulting image
+    rescale: boolean : If True, rescale data such that the largest pixel value in the triplet
+        is rescaled to the largest allowed pixel value in the 16 bit format. Will preserve as much
+        information as possible
     
     Returns
     _______
     
-    Returns a PIL Image object containing an RGB png
+    Returns a numpy array containing the image data
     
     '''
     
@@ -632,7 +639,10 @@ def fits_rgb_png(mef , savefilename = None , show = False):
     search_data = mef[2].data
     templ_data = mef[3].data
 
-
+    
+    '''
+    
+    Not really necessary now that we support 16 bit color
     ##Shift the data so that the smallest pixel value is 0.
     ##Reduces the amount of rescaling necessary
     diff_shift = ( np.amin(diff_data) )
@@ -643,8 +653,19 @@ def fits_rgb_png(mef , savefilename = None , show = False):
     diff_data -= diff_shift
     search_data -= search_shift
     templ_data -= templ_shift
+    '''
+
+
+
+    largest_allowed_pix_value = 65535
+    largest_pix_value = max( np.amax(diff_data) , np.amax(templ_data) , np.amax(search_data))
     
-    compression_factor = max( np.amax(diff_data) , np.amax(templ_data) , np.amax(search_data)) / 255
+    if rescale:
+        compression_factor = max( largest_pix_value / largest_allowed_pix_value , 0.0)
+    else:
+        compression_factor = max( largest_pix_value / largest_allowed_pix_value , 1.0) ##Only rescale in necessary
+    
+    print ("Data will be rescaled by a factor of {}".format(compression_factor))
     
     diff_data /= compression_factor
     search_data /= compression_factor
@@ -653,34 +674,28 @@ def fits_rgb_png(mef , savefilename = None , show = False):
     ##Check pixel values, print warning if we are overflowing max allowed value.
     ##If we are, png files will round any values greater than 255 to 255
     
-    if np.amax(diff_data) > 255:
+    if np.amax(diff_data) > largest_allowed_pix_value:
         print ("Warning, max pixel value in diffs ({}) excedes max png pixel value".format(np.amax(diff_data)))
-    if np.amax(search_data) > 255:
+    if np.amax(search_data) > largest_allowed_pix_value:
         print ("Warning, max pixel value in search ({}) excedes max png pixel value".format(np.amax(search_data)))
-    if np.amax(templ_data) > 255:
+    if np.amax(templ_data) > largest_allowed_pix_value:
         print ("Warning, max pixel value in templ ({}) excedes max png pixel value".format(np.amax(templ_data)))
 
+    
+    ### cv2 orders the colors as BGR, so we want template , search , diff
+    
 
-    ##Build PIL images from fits data
-    diff=Image.fromarray(diff_data)
-    search=Image.fromarray(search_data)
-    templ=Image.fromarray(templ_data)
-
-    composite=Image.merge('RGB' , (diff.convert('L'),search.convert('L'),templ.convert('L'))) ##RGB Image
+    bgrim = cv2.merge( ( templ_data.astype(np.uint16) , search_data.astype(np.uint16) , diff_data.astype(np.uint16)) )
+    
 
 
     #Save outputs
     if savefilename != None:
     
-        diff.convert('L').save(savefilename + "_diff.png")
-        search.convert('L').save(savefilename + "_search.png")
-        templ.convert('L').save(savefilename + "template.png")
-        composite.save(savefilename + "_rgb.png")
+        cv2.imwrite(savefilename , bgrim)
     
-    if show:
-        composite.show()
         
-    return composite
+    return bgrim
 
 
 
