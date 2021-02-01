@@ -36,8 +36,8 @@ from matplotlib import pyplot as plt, cm
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 #local
-#from util import *
-from .util import *
+from util import *
+#from .util import *
 
 # astropy Table format for the gaia source catalog
 _GAIACATFORMAT_ = 'ascii.ecsv'
@@ -1843,9 +1843,19 @@ class FakePlanter:
             primary = fits.PrimaryHDU(data=None,header=None)
             primary.header["Author"] = "Kyle OConnor"
             primary.header["MEF"] = f'FK{idx:03d}'
+            try:
+                assert(fits.CompImageHDU == type(self.diffim.postage_stamp)==type(self.searchim.postage_stamp)==type(self.templateim.postage_stamp))
+            except:
+                self.diffim.postage_stamp = fits.CompImageHDU(data=self.diffim.postage_stamp.data,header=self.diffim.postage_stamp.header)
+                self.searchim.postage_stamp = fits.CompImageHDU(data=self.searchim.postage_stamp.data,header=self.searchim.postage_stamp.header)
+                self.templateim.postage_stamp = fits.CompImageHDU(data=self.templateim.postage_stamp.data,header=self.templateim.postage_stamp.header)
+
             new_hdul = fits.HDUList([primary, self.diffim.postage_stamp,self.searchim.postage_stamp,self.templateim.postage_stamp])
             if writetodisk:
-                new_hdul.writeto(f'FK{idx:03d}.fits', overwrite=True)
+                if saveas == None:
+                    new_hdul.writeto(f'FK{idx:03d}.fits', overwrite=True)
+                else:
+                    new_hdul.writeto(f'{saveas}_FK{idx:03d}.fits', overwrite=True)
             MEFS.append(new_hdul)
 
         return MEFS
@@ -1933,9 +1943,19 @@ class FakePlanter:
             primary = fits.PrimaryHDU(data=None,header=None)
             primary.header["Author"] = "Kyle OConnor"
             primary.header["MEF"] = f'FP{i:03d}'
+            try:
+                assert(fits.CompImageHDU == type(self.diffim.postage_stamp)==type(self.searchim.postage_stamp)==type(self.templateim.postage_stamp))
+            except:
+                self.diffim.postage_stamp = fits.CompImageHDU(data=self.diffim.postage_stamp.data,header=self.diffim.postage_stamp.header)
+                self.searchim.postage_stamp = fits.CompImageHDU(data=self.searchim.postage_stamp.data,header=self.searchim.postage_stamp.header)
+                self.templateim.postage_stamp = fits.CompImageHDU(data=self.templateim.postage_stamp.data,header=self.templateim.postage_stamp.header)
+                
             new_hdul = fits.HDUList([primary, self.diffim.postage_stamp,self.searchim.postage_stamp,self.templateim.postage_stamp])
             if writetodisk:
-                new_hdul.writeto(f'FP{i:03d}.fits', overwrite=True)
+                if saveas == None:
+                    new_hdul.writeto(f'FP{i:03d}.fits', overwrite=True)
+                else:
+                    new_hdul.writeto(f'{saveas}_FP{i:03d}.fits', overwrite=True)
             MEFS.append(new_hdul)
 
         return MEFS
