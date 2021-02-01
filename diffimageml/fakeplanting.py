@@ -35,6 +35,10 @@ import matplotlib
 from matplotlib import pyplot as plt, cm
 from mpl_toolkits.axes_grid1 import ImageGrid
 
+import warnings
+from astropy.wcs import FITSFixedWarning
+##Supress FITSFixedWarnings
+warnings.simplefilter("ignore" , category = FITSFixedWarning)
 #local
 from util import *
 #from .util import *
