@@ -3,7 +3,6 @@ import scipy
 
 import os, collections
 
-from astroquery.gaia import Gaia
 
 from astropy import units
 from astropy.coordinates import SkyCoord
@@ -515,6 +514,7 @@ class FitsImage:
         height = naxis2 * pixelscale * units.deg
 
         # Do the search. Returns an astropy Table
+        from astroquery.gaia import Gaia
         full_gaia_source_table = Gaia.query_object_async(
             coordinate=coord, width=width, height=height)
 
