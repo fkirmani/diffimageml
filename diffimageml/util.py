@@ -483,6 +483,425 @@ def write_to_catalog(columns , filename = "cat.ecsv" , column_names = None, over
          
     return catalog
 
+
+def lco_xid_sdss_query():
+    """
+    Get sdss star properties, rmag and wcs for 112 target fields in our LCOLSS program.
+    Needed if want to do a ZP calibration to the LCO data.
+
+    Note requires Visiblity.csv stored locally. Matches ra/dec of lco targets from Visibility.csv 
+    to stars from sdss database
+    """
+
+    from astroquery.sdss import SDSS
+    visibility = ascii.read('Visibility.csv')
+
+    Source_IDs = visibility['col1'] # Source IDs
+    ra_deg = visibility['col2']
+    dec_deg = visibility['col3'] 
+    for idx in range(1,len(visibility[1:])+1):
+        print("------------------------------")
+        obj,ra,dec = Source_IDs[idx],ra_deg[idx],dec_deg[idx]
+        print(idx,obj,ra,dec)
+        
+        """
+        full_radius ~ pixscale * 2048 is arcsec from center of an LCO exposure image
+        go to 90% of that radius to account for target ra/dec dithers i.e. not being perfectly centered and edge effects
+        """
+        full_radius = 0.389*(4096/2)    
+        radius = 0.85*full_radius
+        strradius = str(radius) + ' arcsec'
+        print(radius,'ra ~ [{:.2f},{:.2f}], dec ~ [{:.2f},{:.2f}]'.format(float(ra)-radius/3600,float(ra)+radius/3600,float(dec)-radius/3600,float(dec)+radius/3600))
+        fields = ['ra','dec','objid','run','rerun','camcol','field','r','mode','nChild','type','clean','probPSF',
+                 'psfMag_r','psfMagErr_r'] 
+        pos = SkyCoord(ra,dec,unit="deg",frame='icrs')
+        xid = SDSS.query_region(pos,radius=strradius,fields='PhotoObj',photoobj_fields=fields) 
+        Star = xid[xid['probPSF'] == 1]
+        Gal = xid[xid['probPSF'] == 0]
+        print(len(xid),len(Star),len(Gal))
+        Star = Star[Star['clean']==1]
+        print(len(Star))
+        ascii.write(Star,f"{obj}_SDSS_CleanStar.csv")
+        
+        idx+=1
+
+def LCO_PSF_PHOT(hdu,init_guesses):
+    # im ~ np array dat, pixel [x0,y0] ~ float pixel position, sigma_psf ~ LCO-PSF sigma 
+    x0,y0=init_guesses
+    im = hdu.data
+    hdr = hdu.header
+    
+    fwhm = hdr['L1FWHM']/hdr['PIXSCALE'] # PSF FWHM in pixels, roughly ~ 5 pixels, ~ 2 arcsec 
+    sigma_psf = fwhm*gaussian_fwhm_to_sigma # PSF sigma in pixels
+    
+    psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
+    daogroup = DAOGroup(2.0*sigma_psf*gaussian_sigma_to_fwhm)
+    mmm_bkg = MMMBackground()
+    fitter = LevMarLSQFitter()
+
+    psf_model.x_0.fixed = True
+    psf_model.y_0.fixed = True
+    pos = Table(names=['x_0', 'y_0'], data=[[x0],[y0]]) # optionally give flux_0 has good aperture method for guessing though
+
+    photometry = BasicPSFPhotometry(group_maker=daogroup,
+                                     bkg_estimator=mmm_bkg,
+                                     psf_model=psf_model,
+                                     fitter=LevMarLSQFitter(),
+                                     fitshape=(11,11))
+    result_tab = photometry(image=im, init_guesses=pos)
+    residual_image = photometry.get_residual_image()
+    
+    return result_tab
+
+def table_header(hdu,idx=0):
+    """
+    Make a pandas data frame out of the fits header object
+    """
+    hdr = hdu.header
+    d = {}
+    for i in hdr:
+        name = str(i)
+        try:
+            dat = float(hdr[i])
+        except:
+            dat = str(hdr[i])
+        d[name] = dat
+    df = pd.DataFrame(data=d,index=[idx])
+    return df
+
+def ZPimage(lco_phot_tab,matched_sdss,plot=True,saveas="zp.png",scs=True):
+    """
+    Make png images showing the determination of ZP.
+
+    Parameters
+    ___________
+    lco_phot_tab ~ Astropy Table
+        flux_fit, flux_unc from PSF-Phot on LCO image stars
+    matched_sdss ~ Astropy Table
+        psfMag_r, psfMagErr_r from matching sdss data
+
+    Returns
+    __________
+    Weighted Average ~ ZP(star)
+        ZP from each star using rmag and flux. 
+    
+    Linear Fit ~ rmag(-2.5log10flux)
+        ZP from intercept.
+    """
+    try:
+        assert(len(lco_phot_tab) == len(matched_sdss))
+        print("{} data".format(len(lco_phot_tab)))
+    except:
+        print("Photometry and SDSS table aren't the same shape.")
+        ZP,b = None,None
+        return ZP,b
+
+    flux_lco,flux_unc_lco = np.array(lco_phot_tab['flux_fit']),np.array(lco_phot_tab['flux_unc'])
+    rmag,rmagerr = np.array(matched_sdss['psfMag_r']),np.array(matched_sdss['psfMagErr_r'])
+
+    # clip negative fluxes 
+    flux_clip = np.log10(lco_phot_tab['flux_fit'])
+    indices = ~np.isnan(flux_clip)
+    true_count = np.sum(indices)
+    
+    flux_lco,flux_unc_lco = flux_lco[indices],flux_unc_lco[indices]
+    rmag,rmagerr = rmag[indices],rmagerr[indices]
+
+    print("{} data after clipping bad fluxes".format(true_count))
+
+    # uncertainties and weights
+    lco_uncertainty = flux_unc_lco/flux_lco
+    sdss_uncertainty = rmagerr
+    uncertainties = []
+    for i in range(true_count):
+        uncertainties.append( np.sqrt(lco_uncertainty[i]**2 + sdss_uncertainty[i]**2) )
+    print("median uncertainties {:.2f}, median sdss uncertainties {:.2f}, median lco uncertainties {:.2f}".format(np.median(uncertainties),np.median(sdss_uncertainty),np.median(lco_uncertainty)))
+    weights = [1/i for i in uncertainties] 
+
+    # ZP as weighted average of zp = m + 2.5 log10(f), for each star
+    # m from sdss, f from psf-fit on lco  
+    values = rmag + 2.5*np.log10(flux_lco)
+    values = [i for i in values]
+    ZP = util.weighted_average(weights,values)
+    # clip remaining bad data using scs around weighted avg ZP
+    if scs:
+        zp_clip = sigma_clip(values,sigma=3)
+        indices = ~zp_clip.mask
+        true_count = np.sum(indices)
+        values = np.array(values)[indices]
+        weights = np.array(weights)[indices]
+        ZP = util.weighted_average(weights,values)
+        print("{} data after clipping around ZP from weighted average".format(true_count))
+    print("ZP from weighted_average = {:.2f}".format(ZP))
+    flux_lco,flux_unc_lco = flux_lco[indices],flux_unc_lco[indices]
+    rmag,rmagerr = rmag[indices],rmagerr[indices]
+    lco_uncertainty,sdss_uncertainty=lco_uncertainty[indices],sdss_uncertainty[indices]
+
+    # weighted average plot
+    if plot:
+        matplotlib.rcParams.update({'font.size': 20,'xtick.labelsize':15,'ytick.labelsize':15})
+        fig,ax = plt.subplots(figsize=(16,8))
+        spacing = np.arange(0,true_count,1)
+        uncertainties = [1/i for i in weights]
+        ax.errorbar(spacing,values,yerr=uncertainties,marker='x',ls='',color='red',label='zp')
+        ax.hlines(ZP,0,true_count,linestyle='--',label='ZP={:.1f}'.format(ZP),color='black')
+        plt.xlabel("Star")
+        plt.ylabel("$rmag_{sdss}$")
+        plt.legend()
+        plt.show()
+        plt.legend()
+        plt.savefig("weighted_average_"+saveas,bbox_inches='tight')
+        plt.close()
+
+    # ZP as intercept in linear fit 
+    xi = -2.5*np.log10(flux_lco)
+    xerr = lco_uncertainty
+    fig,ax = plt.subplots(figsize=(16,8))
+    m,b=np.polyfit(xi,rmag,1,w=weights)
+    if plot:
+        ax.errorbar(xi,rmag,xerr=xerr,yerr=rmagerr,marker='x',ls='',color='red',label='')
+        x=np.linspace(np.min(xi),np.max(xi),100)
+        y=m*x + b
+        ax.plot(x,y,ls='--',color='black',label='ZP={:.1f}'.format(b))
+        plt.show()
+        plt.xlabel("$-2.5log10(f_{lco})$")
+        plt.ylabel("$rmag_{sdss}$")
+        plt.legend()
+        plt.savefig("lin_fit_"+saveas,bbox_inches='tight')
+        plt.close()
+    print("ZP as interecept of linear fit = {:.2f}".format(b))
+
+    try:
+        assert(np.abs(ZP-b) < 0.2)
+    except:
+        # things that make you go hmmm
+        print("weighted average and intercept ZPs disagree by more than 0.2 mag",ZP,b)
+        ZP,b = None,None
+        return ZP,b
+    
+    return ZP,b 
+
+def lco_sdss_pipeline(self,threshold=10,writetodisk=False):
+    """
+    A pipeline to measure detection efficiency of fake planted point sources in LCO difference images. 
+    The PSF-flux calibrated to AB magnitudes using ZP from sdss data. 
+
+    Note assumes lco_xid_query has been run. i.e. that sdss data is stored locally ~ sdss_queries/target_SDSS_CleanStar.csv
+
+    Parameters
+    ---------------
+    hdu : ~astropy.io.fits
+        The LCO search image
+    diffhdu : ~astropy.io.fits 
+        The LCO difference image  
+    threshold : float
+        The S/N used in DAOStarFinder. Default 10
+
+    Returns
+    _________________
+    df : pandas DataFrame
+        Has columns with the header values and m50,alpha of efficiency.
+        If pipeline fails df flag column returns idx corresponding to step of failure. 
+    matched_lco : Astropy Table
+        The stars in LCO image matched to known SDSS
+    matched_sdss : Astropy Table
+        The stars in SDSS matched to detected in LCO   
+    lco_phot_tab : Astropy Table
+        The LCO image photometry on the stars in matched_lco
+
+    Steps in pipeline:
+    1. Use DAOFIND to detect stars in the LCO images, https://photutils.readthedocs.io/en/stable/detection.html
+    2. Use the hdu wcs to determine ra/dec of xcentroid&ycentroids for stars found
+    3. Read the sdss_queries/target_SDSS_CleanStar.csv using hdu target (has sdss rmag and ra/dec, trimmed to good mags for ZP)
+    4. Find DAO sources within 5 arcsec of SDSS sources
+    5. Do Basic PSF-Photometry on stars in LCO matched to a SDSS, using L1FHWM and IntegratedGaussianPRF
+    6. The ZP is the weighted average. weights of each ZP measurement using SDSS-rmags and LCO-fluxes fits 
+    # I've ommitted 7,8 (if Fawad/SR ends up wanting them let me know)
+    7. Add PSF to data at different mags and measure detection efficiencies
+    8. Fit model of m50,alpha to efficiencies 
+    """
+    hdu = self.searchim.sci
+    diffhdu = self.diffim.sci
+    epsfmodel = lco_epsf(self)
+
+    origname = hdu.header['ORIGNAME'].split("-e00")[0]
+    print(origname)
+    
+    # 1. DAO
+    print("\n")
+    print("1. DAOStarFinder on exposure")
+    data,hdr = hdu.data, hdu.header 
+    mean, median, std = sigma_clipped_stats(data, sigma=3.0)  
+    print("mean {:.2f}, median {:.2f}, std {:.2f}".format(mean, median, std))  
+    fwhm = hdr["L1FWHM"]
+    print("threshold {:.1f},fwhm {:.2f} arcsec".format(threshold,fwhm))
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=5.*std)  
+    sources = daofind(data - median)
+
+    print("{} DAO sources".format(len(sources)))
+    print(sources.columns)
+
+    try:
+        assert(fwhm >= 1.0 and fwhm <= 5.0)
+    except:
+        print("Image_Error 1. FWHM {:.2f} , typical is [1.5,3.5] arcsec strong peak at 2.".format(fwhm))
+        print("ZP=m50=alpha=None")
+        # make pd DF out of the header and store m50,alpha
+        df = table_header(diffhdu,idx=origname)
+        df['m50'] = None
+        df['alpha'] = None
+        df['ZP'] = None
+        df['flag'] = 1
+        print(df)
+        if writetodisk:
+            pickle.dump(df,open(f"{origname}_df.pkl","wb"))
+        matched_lco,matched_sdss,lco_phot_tab = None,None,None
+        return df,matched_lco,matched_sdss,lco_phot_tab
+    
+    # 2. LCO Skycoords
+    print("\n")
+    print("2. Ra/Dec of stars found in exposure using hdr wcs")
+    lco_skycoords = []
+    for i in range(len(sources)):
+        pixel = [sources[i]['xcentroid'],sources[i]['ycentroid']]
+        sky = pixtosky(hdu,pixel)
+        lco_skycoords.append(sky)
+    lco_skycoords = SkyCoord(lco_skycoords)
+
+    # 3. Read-in SDSS
+    print("\n")
+    print("3. Reading in sdss star catalog for hdr object")
+    obj = hdu.header['OBJECT']
+    sdss = ascii.read(f"sdss_queries/{obj}_SDSS_CleanStar.csv")
+    sdss_skycoords = SkyCoord(ra=sdss['ra'],dec=sdss['dec'],unit=units.deg)
+    print("{} sdss".format(len(sdss)))
+    print(sdss.columns)
+
+    try:
+        assert(len(sources) >= 0.1*len(sdss))
+    except:
+        print("Image_Error 3. DAO detected {} stars, < 10 percent of stars in sdss {}, something wrong with image",len(sources),len(sdss))
+        print("ZP=m50=alpha=None")
+        # make pd DF out of the header and store m50,alpha
+        df = table_header(diffhdu,idx=origname)
+        df['m50'] = None
+        df['alpha'] = None
+        df['ZP'] = None
+        df['flag'] = 3
+        print(df)
+        if writetodisk:
+            pickle.dump(df,open(f"{origname}_df.pkl","wb"))
+        matched_lco,matched_sdss,lco_phot_tab = None,None,None
+        return df,matched_lco,matched_sdss,lco_phot_tab
+    
+    # 4. Match SkyCoords
+    print("\n")
+    print("4. Determining stars in both lco DAO and sdss")
+    matchcoord,catalogcoord = lco_skycoords,sdss_skycoords
+    # shapes match matchcoord: idx into cat, min angle sep, unit-sphere distance 
+    idx,sep2d,dist3d=match_coordinates_sky(matchcoord,catalogcoord)
+    good_lcoidx,good_sdssidx,good_sep2d = [],[],[]
+    matched_lco,matched_sdss = [],[]
+    for i in range(len(sources)):
+        if sep2d[i] < 5*units.arcsec:
+            matched_lco.append(sources[i])
+            matched_sdss.append(sdss[idx[i]])
+            good_lcoidx.append(i)
+            good_sdssidx.append(idx[i])
+            good_sep2d.append(sep2d[i])
+        else:
+            pass
+
+    try:
+        assert(len(matched_lco) > 20)
+        matched_lco,matched_sdss = vstack(matched_lco),vstack(matched_sdss)
+        print("After matching (<5 arcsec separation), {} DAO sources, {} sdss".format(len(matched_lco),len(matched_sdss)))
+        print("{:.2f} arcsec median separation".format(np.median([i.value*3600 for i in good_sep2d]))) 
+    except:
+        print("Image_Error 4. Matched < 20 stars, something wrong (possibly wcs), not enough to do photometry and calibrate ZP.")
+        print("ZP=m50=alpha=None")
+        # make pd DF out of the header and store m50,alpha
+        df = table_header(diffhdu,idx=origname)
+        df['m50'] = None
+        df['alpha'] = None
+        df['ZP'] = None
+        df['flag'] = 4
+        print(df)
+        if writetodisk:
+            pickle.dump(df,open(f"{origname}_df.pkl","wb"))
+        lco_phot_tab = None
+        return df,matched_lco,matched_sdss,lco_phot_tab   
+
+    # 5. Photometry 
+    print("\n")
+    print("5. Doing Basic PSF-Photometry on the lco stars")
+    lco_phots = []
+    for i in range(len(matched_lco)):
+        location,size = [matched_lco[i]['xcentroid'],matched_lco[i]['ycentroid']],50
+        postage_stamp = cut_hdu(hdu,location,size)
+        init_guess = postage_stamp.data.shape[0]/2,postage_stamp.data.shape[1]/2 # should be at center
+        lco_psf_phot = LCO_PSF_PHOT(postage_stamp,init_guess)
+        lco_phots.append(lco_psf_phot)
+    try:
+        assert(len(lco_phots) == len(matched_lco))
+        lco_phot_tab = vstack(lco_phots)
+        print("{} LCO PSF-Photometry".format(len(lco_phot_tab)))
+        print(lco_phot_tab.columns)
+        # write the successful matched stars & photometry into pkl
+        pickle.dump(lco_phot_tab,open(f"{origname}_phot.pkl","wb"))
+        pickle.dump(matched_lco,open(f"{origname}_match_lco.pkl","wb"))
+        pickle.dump(matched_sdss,open(f"{origname}_match_sdss","wb"))
+    except:
+        print("Image Error 5. Photometry failed.")
+        print("ZP=m50=alpha=None")
+        # make pd DF out of the header and store m50,alpha
+        df = table_header(diffhdu,idx=origname)
+        df['m50'] = None
+        df['alpha'] = None
+        df['ZP'] = None
+        df['flag'] = 5
+        print(df)
+        if writetodisk:
+            pickle.dump(df,open(f"{origname}_df.pkl","wb"))
+        lco_phot_tab = None
+        return df,matched_lco,matched_sdss,lco_phot_tab 
+
+    # 6. ZP as weighted average or linear intercept 
+    # m from sdss, f from psf-fit on lco  
+    print("\n")
+    print("6. Getting ZP from weighted average or linear-intercept using sdss-rmags and lco-psf flux_fits")
+    ZP,b = ZPimage(lco_phot_tab,matched_sdss,scs=True,plot=True,saveas=f"{origname}_zp.png")
+    try:
+        assert(ZP != None and b != None)
+        print("ZP = {:.2f}, b = {:.2f}".format(ZP,b))
+        ZP = b
+        print("Using the linear intercept value as true ZP")
+    except:
+        print("Image Error 6. ZP calibration failed.")
+        print("ZP=m50=alpha=None")
+        # make pd DF out of the header and store m50,alpha
+        df = table_header(diffhdu,idx=origname)
+        df['m50'] = None
+        df['alpha'] = None
+        df['ZP'] = None
+        df['flag'] = 6
+        print(df)
+        if writetodisk:
+            pickle.dump(df,open(f"{origname}_df.pkl","wb"))
+        return df,matched_lco,matched_sdss,lco_phot_tab 
+
+    # make pd DF out of the header and store m50,alpha
+    df = table_header(diffhdu,idx=origname)
+    df['m50'] = None
+    df['alpha'] = None
+    df['ZP'] = ZP
+    df['flag'] = 0
+    print(df)
+    if writetodisk:
+        pickle.dump(df,open(f"{origname}_df.pkl","wb"))
+
+    return df,matched_lco,matched_sdss,lco_phot_tab
+    
 def read_catalog(filename):
     '''
     Takes in the filename for a catalog
